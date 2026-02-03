@@ -53,6 +53,7 @@ add_library(tool_lib
     tool/log_interface.cpp
     tool/spdlog_adapter.cpp
     tool/logger.cpp
+    tool/xml_interface.cpp
 )
 
 target_include_directories(tool_lib
@@ -64,10 +65,12 @@ target_include_directories(tool_lib
 target_link_libraries(tool_lib
     PRIVATE
         spdlog_lib
+        pugixml_lib
 )
 
 target_include_directories(tool_lib PRIVATE
     ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+    ${CMAKE_SOURCE_DIR}/lib/pugixml/src
 )
 
 # 应用层模块

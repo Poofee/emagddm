@@ -54,6 +54,15 @@ target_include_directories(spdlog_lib PUBLIC
     ${CMAKE_SOURCE_DIR}/lib/spdlog/include
 )
 
+# pugixml库配置
+add_library(pugixml_lib
+    ${CMAKE_SOURCE_DIR}/lib/pugixml/src/pugixml.cpp
+)
+
+target_include_directories(pugixml_lib PUBLIC
+    ${CMAKE_SOURCE_DIR}/lib/pugixml/src
+)
+
 # 设置编译选项
 if(MSVC)
     target_compile_options(spdlog_lib PRIVATE /W4)

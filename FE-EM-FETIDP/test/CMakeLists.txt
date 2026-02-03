@@ -12,12 +12,32 @@ add_executable(test_logger
 target_include_directories(test_logger
     PRIVATE
         ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/lib/pugixml/src
 )
 
 target_link_libraries(test_logger
     PRIVATE
         tool_lib
         spdlog_lib
+        pugixml_lib
+)
+
+# XML功能测试
+add_executable(test_xml
+    test_xml.cpp
+)
+
+target_include_directories(test_xml
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/lib/pugixml/src
+)
+
+target_link_libraries(test_xml
+    PRIVATE
+        tool_lib
+        spdlog_lib
+        pugixml_lib
 )
 
 # 启用测试
