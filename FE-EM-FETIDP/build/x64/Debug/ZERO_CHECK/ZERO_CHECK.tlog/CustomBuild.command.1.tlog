@@ -1,0 +1,10 @@
+^D:\CODES\EMAGDDM\FE-EM-FETIDP\BUILD\CMAKEFILES\DAD4AADD47F4F26E4378F179BBE30538\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SD:/codes/emagddm/FE-EM-FETIDP -BD:/codes/emagddm/FE-EM-FETIDP/build --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file D:/codes/emagddm/FE-EM-FETIDP/build/FE_EM_FETIDP.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

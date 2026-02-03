@@ -1,0 +1,10 @@
+^D:\CODES\EMAGDDM\FE-EM-FETIDP\SRC\CMAKELISTS.TXT
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SD:/codes/emagddm/FE-EM-FETIDP -BD:/codes/emagddm/FE-EM-FETIDP/build --check-stamp-file D:/codes/emagddm/FE-EM-FETIDP/build/src/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

@@ -1,0 +1,31 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="D:\codes\emagddm\FE-EM-FETIDP\lib\spdlog\src\spdlog.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\codes\emagddm\FE-EM-FETIDP\lib\spdlog\src\cfg.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\codes\emagddm\FE-EM-FETIDP\lib\spdlog\src\color_sinks.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\codes\emagddm\FE-EM-FETIDP\lib\spdlog\src\file_sinks.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\codes\emagddm\FE-EM-FETIDP\lib\spdlog\src\stdout_sinks.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\codes\emagddm\FE-EM-FETIDP\lib\spdlog\src\async.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="D:\codes\emagddm\FE-EM-FETIDP\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{7B011F0C-29B0-3F48-9A9F-D51D67E1E1D5}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
