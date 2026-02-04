@@ -1,0 +1,33 @@
+{
+  "solver_config": {
+    "problem_type": "2D_steady",
+    "mesh_file": "mesh/motor2d_simple.msh",
+    "subdomain_count": 4,
+    "max_iterations": 100,
+    "convergence_threshold": 1e-6,
+    "solver_type": "FETI-DP"
+  },
+  "material_properties": {
+    "stator": {
+      "permeability": 1.0,
+      "conductivity": 0.0
+    },
+    "rotor": {
+      "permeability": 1.0,
+      "conductivity": 0.0
+    },
+    "airgap": {
+      "permeability": 1.0,
+      "conductivity": 0.0
+    }
+  },
+  "boundary_conditions": {
+    "outer_boundary": "magnetic_insulation",
+    "inner_boundary": "periodic"
+  },
+  "output_settings": {
+    "log_level": "INFO",
+    "output_directory": "output/field",
+    "output_format": "VTK"
+  }
+}

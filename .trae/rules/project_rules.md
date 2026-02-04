@@ -44,7 +44,7 @@
 - [开发流程规范](docs/development_workflow.md)
 - [交付物规范](docs/deliverables_requirements.md)
 - [调试与日志规范](docs/debugging_logging.md)
-
+- [头文件规范](docs/header_inclusion_guidelines.md)
 ## 补充说明
 
 ### 算法一致性

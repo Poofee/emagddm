@@ -7,7 +7,7 @@
 ### 单头文件库
 - 直接放入 lib/ 对应目录，通过 #include 直接引用
 - 无需额外编译、链接
-- 示例：nlohmann/json、spdlog
+- 示例：spdlog
 
 ### 轻量开源库
 - 放入 lib/ 对应目录
