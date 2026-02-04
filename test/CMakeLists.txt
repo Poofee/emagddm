@@ -45,7 +45,35 @@ add_executable(test_sparse_matrix_stage1
     test_sparse_matrix_stage1.cpp
 )
 
+add_executable(test_sparse_matrix_stage2
+    test_sparse_matrix_stage2.cpp
+)
+
+# 稀疏矩阵功能测试（Google Test版本）
+add_executable(test_sparse_matrix_gtest_stage1
+    test_sparse_matrix_gtest_stage1.cpp
+)
+
+add_executable(test_sparse_matrix_gtest_stage2
+    test_sparse_matrix_gtest_stage2.cpp
+)
+
 target_include_directories(test_sparse_matrix_stage1
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+)
+
+target_include_directories(test_sparse_matrix_stage2
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+)
+
+target_include_directories(test_sparse_matrix_gtest_stage1
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+)
+
+target_include_directories(test_sparse_matrix_gtest_stage2
     PRIVATE
         ${CMAKE_SOURCE_DIR}/include
 )
@@ -55,7 +83,27 @@ target_link_libraries(test_sparse_matrix_stage1
         numeric_lib
 )
 
+target_link_libraries(test_sparse_matrix_stage2
+    PRIVATE
+        numeric_lib
+)
+
+target_link_libraries(test_sparse_matrix_gtest_stage1
+    PRIVATE
+        numeric_lib
+        gtest_main
+)
+
+target_link_libraries(test_sparse_matrix_gtest_stage2
+    PRIVATE
+        numeric_lib
+        gtest_main
+)
+
 # 启用测试
 enable_testing()
 add_test(NAME test_logger COMMAND test_logger)
 add_test(NAME test_sparse_matrix_stage1 COMMAND test_sparse_matrix_stage1)
+add_test(NAME test_sparse_matrix_stage2 COMMAND test_sparse_matrix_stage2)
+add_test(NAME test_sparse_matrix_gtest_stage1 COMMAND test_sparse_matrix_gtest_stage1)
+add_test(NAME test_sparse_matrix_gtest_stage2 COMMAND test_sparse_matrix_gtest_stage2)
