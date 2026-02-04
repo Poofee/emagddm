@@ -58,6 +58,14 @@ add_executable(test_sparse_matrix_gtest_stage2
     test_sparse_matrix_gtest_stage2.cpp
 )
 
+add_executable(test_sparse_matrix_gtest_stage3
+    test_sparse_matrix_gtest_stage3.cpp
+)
+
+add_executable(test_sparse_matrix_gtest_stage3_simple
+    test_sparse_matrix_gtest_stage3_simple.cpp
+)
+
 target_include_directories(test_sparse_matrix_stage1
     PRIVATE
         ${CMAKE_SOURCE_DIR}/include
@@ -78,6 +86,16 @@ target_include_directories(test_sparse_matrix_gtest_stage2
         ${CMAKE_SOURCE_DIR}/include
 )
 
+target_include_directories(test_sparse_matrix_gtest_stage3
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+)
+
+target_include_directories(test_sparse_matrix_gtest_stage3_simple
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+)
+
 target_link_libraries(test_sparse_matrix_stage1
     PRIVATE
         numeric_lib
@@ -86,6 +104,34 @@ target_link_libraries(test_sparse_matrix_stage1
 target_link_libraries(test_sparse_matrix_stage2
     PRIVATE
         numeric_lib
+)
+
+target_link_libraries(test_sparse_matrix_gtest_stage1
+    PRIVATE
+        numeric_lib
+        GTest::gtest
+        GTest::gtest_main
+)
+
+target_link_libraries(test_sparse_matrix_gtest_stage2
+    PRIVATE
+        numeric_lib
+        GTest::gtest
+        GTest::gtest_main
+)
+
+target_link_libraries(test_sparse_matrix_gtest_stage3
+    PRIVATE
+        numeric_lib
+        GTest::gtest
+        GTest::gtest_main
+)
+
+target_link_libraries(test_sparse_matrix_gtest_stage3_simple
+    PRIVATE
+        numeric_lib
+        GTest::gtest
+        GTest::gtest_main
 )
 
 target_link_libraries(test_sparse_matrix_gtest_stage1

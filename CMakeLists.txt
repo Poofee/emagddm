@@ -71,7 +71,7 @@ else()
 endif()
 
 # googletest配置（测试时启用）
-# add_subdirectory(lib/googletest)
+add_subdirectory(lib/googletest)
 
 # 创建可执行文件
 add_executable(fetidp_solver src/main.cpp)

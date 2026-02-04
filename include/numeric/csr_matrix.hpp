@@ -9,8 +9,15 @@
 #pragma once
 
 #include "sparse_base.hpp"
+#include "coo_matrix.hpp"
 #include <vector>
 #include <complex>
+
+// 前向声明
+namespace emag {
+    template<typename T>
+    class Vector;
+}
 
 namespace numeric {
 
@@ -80,11 +87,18 @@ public:
     void build_from_coo(const CooMatrix<T>& coo);
 
     /**
-     * @brief 矩阵向量乘法
+     * @brief 矩阵向量乘法（使用std::vector）
      * @param x 输入向量
      * @param y 输出向量
      */
     void mat_vec(const std::vector<T>& x, std::vector<T>& y) const;
+
+    /**
+     * @brief 矩阵向量乘法（使用Vector类）
+     * @param x 输入向量
+     * @param y 输出向量
+     */
+    void mat_vec(const emag::Vector<T>& x, emag::Vector<T>& y) const;
 
     /**
      * @brief 获取行偏移数组

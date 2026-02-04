@@ -146,6 +146,25 @@ void CsrMatrix<T>::mat_vec(const std::vector<T>& x, std::vector<T>& y) const {
 }
 
 template<typename T>
+void CsrMatrix<T>::mat_vec(const emag::Vector<T>& x, emag::Vector<T>& y) const {
+    if (!built_) {
+        throw std::runtime_error("CSR矩阵未构建，无法进行矩阵向量乘法");
+    }
+    if (x.size() != cols_) {
+        throw std::invalid_argument("输入向量尺寸与矩阵列数不匹配");
+    }
+
+    y.resize(rows_);
+    y.set_zero();
+
+    for (int i = 0; i < rows_; ++i) {
+        for (int j = row_ptr_[i]; j < row_ptr_[i + 1]; ++j) {
+            y[i] += values_[j] * x[col_indices_[j]];
+        }
+    }
+}
+
+template<typename T>
 const std::vector<int>& CsrMatrix<T>::get_row_ptr() const {
     return row_ptr_;
 }
