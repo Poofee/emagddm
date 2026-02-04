@@ -1,21 +1,30 @@
 /**
  * @file sparse_matrix.hpp
  * @brief 核心数值层 - 稀疏矩阵管理模块头文件
- * @details 提供稀疏矩阵的基本操作接口，封装Eigen库的稀疏矩阵功能
+ * @details 提供稀疏矩阵的基本操作接口，基于新的稀疏矩阵架构
  * @author Poofee
- * @date 2026-XX-XX
- * @version 1.0
+ * @date 2026-02-04
+ * @version 2.0
+ * 
+ * @note 此文件为兼容性接口，推荐使用新的稀疏矩阵类：
+ * - CooMatrix: COO格式稀疏矩阵，适合矩阵组装
+ * - CsrMatrix: CSR格式稀疏矩阵，适合矩阵求解
+ * - MatrixMarketIO: MatrixMarket格式I/O功能
  */
 
 #pragma once
 
-#include <vector>
+#include "sparse_base.hpp"
+#include "coo_matrix.hpp"
+#include "csr_matrix.hpp"
+#include "matrix_market_io.hpp"
 
 namespace numeric {
 
 /**
  * @class SparseMatrix
- * @brief 稀疏矩阵管理类
+ * @brief 稀疏矩阵管理类（兼容性接口）
+ * @deprecated 推荐使用新的CooMatrix或CsrMatrix类
  */
 class SparseMatrix {
 public:

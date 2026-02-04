@@ -40,6 +40,22 @@ target_link_libraries(test_xml
         pugixml_lib
 )
 
+# 稀疏矩阵功能测试
+add_executable(test_sparse_matrix_stage1
+    test_sparse_matrix_stage1.cpp
+)
+
+target_include_directories(test_sparse_matrix_stage1
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_sparse_matrix_stage1
+    PRIVATE
+        numeric_lib
+)
+
 # 启用测试
 enable_testing()
 add_test(NAME test_logger COMMAND test_logger)
+add_test(NAME test_sparse_matrix_stage1 COMMAND test_sparse_matrix_stage1)
