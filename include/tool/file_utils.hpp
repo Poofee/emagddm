@@ -1,10 +1,6 @@
 /**
  * @file file_utils.hpp
- * @brief 基础工具层 - 文件操作工具头文件
- * @details 提供文件路径解析、读写、目录操作等常用功能
- * @author AI Developer
- * @date 2026-02-06
- * @version 1.0
+ * @brief 基础工具层 - 文件操作工具头文件（简化版）
  */
 
 #pragma once
@@ -26,7 +22,6 @@ std::string getFilenameWithoutExtension(const std::string& file_path);
 std::string getDirectory(const std::string& file_path);
 std::string combinePath(const std::string& directory, const std::string& filename);
 std::string normalizePath(const std::string& path);
-std::string makeAbsolute(const std::string& path);
 bool isAbsolute(const std::string& path);
 bool isRelative(const std::string& path);
 std::string changeExtension(const std::string& file_path, const std::string& new_extension);
@@ -49,18 +44,17 @@ bool appendText(const std::string& file_path, const std::string& content);
 
 std::vector<std::string> listFiles(const std::string& directory);
 std::vector<std::string> listFilesRecursive(const std::string& directory);
-std::vector<std::string> findFiles(const std::string& pattern);
 std::vector<std::string> findFilesByExtension(const std::string& directory, const std::string& extension);
 
 class FileWatcher {
 public:
     explicit FileWatcher(const std::string& file_path);
     bool hasChanged();
-    std::chrono::file_time_type lastWriteTime() const;
+    std::chrono::system_clock::time_point lastWriteTime() const;
 
 private:
     std::string file_path_;
-    std::chrono::file_time_type last_write_time_;
+    std::chrono::system_clock::time_point last_write_time_;
 };
 
 struct FileInfo {
@@ -69,9 +63,9 @@ struct FileInfo {
     std::string extension;
     uint64_t size;
     bool is_directory;
-    std::chrono::file_time_type creation_time;
-    std::chrono::file_time_type modification_time;
-    std::chrono::file_time_type last_access_time;
+    std::chrono::system_clock::time_point creation_time;
+    std::chrono::system_clock::time_point modification_time;
+    std::chrono::system_clock::time_point last_access_time;
 };
 
 std::optional<FileInfo> getInfo(const std::string& path);

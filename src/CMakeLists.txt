@@ -58,6 +58,8 @@ add_library(tool_lib
     tool/em_exception.cpp
     tool/id_generator.cpp
     tool/file_utils.cpp
+    tool/project_data.cpp
+    tool/project_manager.cpp
 )
 
 target_include_directories(tool_lib

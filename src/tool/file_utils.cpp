@@ -17,7 +17,9 @@
 #include <sys/types.h>
 #endif
 
-namespace tool::file_utils {
+namespace tool {
+
+namespace file_utils {
 
 std::string getExtension(const std::string& file_path) {
     auto pos = file_path.find_last_of('.');
@@ -312,7 +314,7 @@ bool FileWatcher::hasChanged() {
     return lastWriteTime() != last_write_time_;
 }
 
-std::chrono::file_time_type FileWatcher::lastWriteTime() const {
+std::chrono::system_clock::time_point FileWatcher::lastWriteTime() const {
 #if defined(_WIN32)
     HANDLE hFile = CreateFileA(file_path_.c_str(), GENERIC_READ, FILE_SHARE_READ,
                                 NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -321,11 +323,14 @@ std::chrono::file_time_type FileWatcher::lastWriteTime() const {
     BOOL success = GetFileTime(hFile, NULL, NULL, &ft);
     CloseHandle(hFile);
     if (!success) return {};
-    return std::chrono::file_time_type(std::chrono::seconds(ft.dwLowDateTime));
+    ULARGE_INTEGER uli;
+    uli.LowPart = ft.dwLowDateTime;
+    uli.HighPart = ft.dwHighDateTime;
+    return std::chrono::system_clock::from_time_t(static_cast<long long>(uli.QuadPart / 10000000ULL - 11644473600ULL));
 #else
     struct stat st;
     if (stat(file_path_.c_str(), &st) != 0) return {};
-    return std::chrono::file_time_type(std::chrono::seconds(st.st_mtime));
+    return std::chrono::system_clock::from_time_t(st.st_mtime);
 #endif
 }
 

@@ -36,6 +36,7 @@ public:
     uint64_t generateMaterialID(const std::string& name);
     uint64_t generateBoundaryID(const std::string& name);
     uint64_t generateExcitationID(const std::string& name);
+    uint64_t generateEntityID(const std::string& name);
     void reset();
 
 private:

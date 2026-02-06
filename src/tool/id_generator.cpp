@@ -79,6 +79,15 @@ uint64_t EntityIDGenerator::generateExcitationID(const std::string& name) {
     return id;
 }
 
+uint64_t EntityIDGenerator::generateEntityID(const std::string& name) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto it = name_map_.find(name);
+    if (it != name_map_.end()) return it->second;
+    uint64_t id = id_gen_.generateID(IDCategory::GEOMETRY);
+    name_map_[name] = id;
+    return id;
+}
+
 void EntityIDGenerator::reset() {
     std::lock_guard<std::mutex> lock(mutex_);
     id_gen_.resetAll();
