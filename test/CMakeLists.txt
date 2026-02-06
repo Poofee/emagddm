@@ -153,8 +153,27 @@ target_link_libraries(test_em_tools
         spdlog_lib
 )
 
+# 基础工具层模块测试（Google Test版本）
+add_executable(test_tool_modules
+    test_tool_modules.cpp
+)
+
+target_include_directories(test_tool_modules
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/tool
+)
+
+target_link_libraries(test_tool_modules
+    PRIVATE
+        tool_lib
+        GTest::gtest
+        GTest::gtest_main
+)
+
 # 启用测试
 enable_testing()
+add_test(NAME test_tool_modules COMMAND test_tool_modules)
 add_test(NAME test_logger COMMAND test_logger)
 add_test(NAME test_em_tools COMMAND test_em_tools)
 add_test(NAME test_sparse_matrix_stage1 COMMAND test_sparse_matrix_stage1)
