@@ -8,18 +8,12 @@
 
 #pragma once
 
+#include "matrix_attribute.hpp"
 #include <vector>
 #include <complex>
 
 namespace numeric {
 
-/**
- * @brief 矩阵数据类型枚举
- */
-enum class MatrixDataType {
-    REAL,    ///< 实数矩阵
-    COMPLEX  ///< 复数矩阵
-};
 
 /**
  * @class SparseMatrixBase
