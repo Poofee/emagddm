@@ -84,6 +84,10 @@ add_library(tool_lib
     tool/operation_logger.cpp
     tool/version_manager.cpp
     tool/mpi_wrapper.cpp
+    tool/maxwell_parser.cpp
+    tool/maxwell_converter_impl.cpp
+    tool/material.cpp
+    tool/boundary.cpp
 )
 
 target_include_directories(tool_lib

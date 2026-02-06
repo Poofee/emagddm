@@ -113,6 +113,7 @@ public:
     bool validate() const override;
 
     const std::string& getName() const { return name_; }
+    void setName(const std::string& name) { name_ = name; }
     uint64_t getID() const { return id_; }
     MatType getType() const { return type_; }
     void setType(MatType type) { type_ = type; }
@@ -247,6 +248,7 @@ public:
     bool validate() const override;
 
     const std::string& getName() const { return name_; }
+    void setName(const std::string& name) { name_ = name; }
     uint64_t getID() const { return id_; }
     BndType getType() const { return type_; }
     void setType(BndType type) { type_ = type; }
@@ -347,6 +349,7 @@ public:
     bool validate() const override;
 
     const std::string& getName() const { return name_; }
+    void setName(const std::string& name) { name_ = name; }
     uint64_t getID() const { return id_; }
     ExcitationType getType() const { return type_; }
     void setType(ExcitationType type) { type_ = type; }
