@@ -57,6 +57,7 @@ add_library(tool_lib
     tool/em_enums.cpp
     tool/em_exception.cpp
     tool/id_generator.cpp
+    tool/file_utils.cpp
 )
 
 target_include_directories(tool_lib
