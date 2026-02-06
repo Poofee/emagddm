@@ -54,6 +54,9 @@ add_library(tool_lib
     tool/spdlog_adapter.cpp
     tool/logger.cpp
     tool/xml_interface.cpp
+    tool/em_enums.cpp
+    tool/em_exception.cpp
+    tool/id_generator.cpp
 )
 
 target_include_directories(tool_lib

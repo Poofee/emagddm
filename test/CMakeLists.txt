@@ -134,21 +134,27 @@ target_link_libraries(test_sparse_matrix_gtest_stage3_simple
         GTest::gtest_main
 )
 
-target_link_libraries(test_sparse_matrix_gtest_stage1
-    PRIVATE
-        numeric_lib
-        gtest_main
+# 电磁模块工具类测试
+add_executable(test_em_tools
+    test_em_tools.cpp
 )
 
-target_link_libraries(test_sparse_matrix_gtest_stage2
+target_include_directories(test_em_tools
     PRIVATE
-        numeric_lib
-        gtest_main
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/tool
+)
+
+target_link_libraries(test_em_tools
+    PRIVATE
+        tool_lib
+        spdlog_lib
 )
 
 # 启用测试
 enable_testing()
 add_test(NAME test_logger COMMAND test_logger)
+add_test(NAME test_em_tools COMMAND test_em_tools)
 add_test(NAME test_sparse_matrix_stage1 COMMAND test_sparse_matrix_stage1)
 add_test(NAME test_sparse_matrix_stage2 COMMAND test_sparse_matrix_stage2)
 add_test(NAME test_sparse_matrix_gtest_stage1 COMMAND test_sparse_matrix_gtest_stage1)
