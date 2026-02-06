@@ -35,6 +35,7 @@ target_link_libraries(fetidp_lib
 # 核心数值层模块
 add_library(numeric_lib
     numeric/sparse_matrix.cpp
+    numeric/preconditioner.cpp
 )
 
 target_include_directories(numeric_lib
@@ -60,6 +61,12 @@ add_library(tool_lib
     tool/file_utils.cpp
     tool/project_data.cpp
     tool/project_manager.cpp
+    # tool/project_validator.cpp
+    # tool/association_map.cpp
+    # tool/format_adapter.cpp
+    # tool/fragmented_storage.cpp
+    # tool/operation_logger.cpp
+    # tool/version_manager.cpp
 )
 
 target_include_directories(tool_lib
