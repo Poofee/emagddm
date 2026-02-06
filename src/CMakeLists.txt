@@ -15,6 +15,11 @@ target_include_directories(fe_em_lib
         ${CMAKE_SOURCE_DIR}/include/fe_em
 )
 
+# MPI库链接（如果启用）
+if(USE_MPI)
+    target_link_libraries(fe_em_lib PRIVATE ${MPI_CXX_LIBRARIES})
+endif()
+
 # FETI-DP核心层模块
 add_library(fetidp_lib
     fetidp/fetidp_context.cpp
@@ -32,6 +37,11 @@ target_link_libraries(fetidp_lib
         fe_em_lib
 )
 
+# MPI库链接（如果启用）
+if(USE_MPI)
+    target_link_libraries(fetidp_lib PRIVATE ${MPI_CXX_LIBRARIES})
+endif()
+
 # 核心数值层模块
 add_library(numeric_lib
     numeric/sparse_matrix.cpp
@@ -48,6 +58,11 @@ target_link_libraries(numeric_lib
     PRIVATE
         include_lib
 )
+
+# MPI库链接（如果启用）
+if(USE_MPI)
+    target_link_libraries(numeric_lib PRIVATE ${MPI_CXX_LIBRARIES})
+endif()
 
 # 基础工具层模块
 add_library(tool_lib
@@ -68,6 +83,7 @@ add_library(tool_lib
     tool/fragmented_storage.cpp
     tool/operation_logger.cpp
     tool/version_manager.cpp
+    tool/mpi_wrapper.cpp
 )
 
 target_include_directories(tool_lib
@@ -81,6 +97,11 @@ target_link_libraries(tool_lib
         spdlog_lib
         pugixml_lib
 )
+
+# MPI库链接（如果启用）
+if(USE_MPI)
+    target_link_libraries(tool_lib PRIVATE ${MPI_CXX_LIBRARIES})
+endif()
 
 target_include_directories(tool_lib PRIVATE
     ${CMAKE_SOURCE_DIR}/lib/spdlog/include
@@ -107,3 +128,8 @@ target_link_libraries(app_lib
         numeric_lib
         tool_lib
 )
+
+# MPI库链接（如果启用）
+if(USE_MPI)
+    target_link_libraries(app_lib PRIVATE ${MPI_CXX_LIBRARIES})
+endif()

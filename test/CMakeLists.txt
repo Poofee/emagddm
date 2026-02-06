@@ -171,6 +171,37 @@ target_link_libraries(test_tool_modules
         GTest::gtest_main
 )
 
+# MPI/OpenMP基础测试
+# OpenMP基础测试
+add_executable(test_omp_basic
+    test_omp_basic.cpp
+)
+
+target_include_directories(test_omp_basic
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_omp_basic
+    PRIVATE
+        tool_lib
+)
+
+# MPI基础测试
+add_executable(test_mpi_basic
+    test_mpi_basic.cpp
+)
+
+target_include_directories(test_mpi_basic
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_mpi_basic
+    PRIVATE
+        tool_lib
+)
+
 # 启用测试
 enable_testing()
 add_test(NAME test_tool_modules COMMAND test_tool_modules)
@@ -180,3 +211,5 @@ add_test(NAME test_sparse_matrix_stage1 COMMAND test_sparse_matrix_stage1)
 add_test(NAME test_sparse_matrix_stage2 COMMAND test_sparse_matrix_stage2)
 add_test(NAME test_sparse_matrix_gtest_stage1 COMMAND test_sparse_matrix_gtest_stage1)
 add_test(NAME test_sparse_matrix_gtest_stage2 COMMAND test_sparse_matrix_gtest_stage2)
+add_test(NAME test_omp_basic COMMAND test_omp_basic)
+add_test(NAME test_mpi_basic COMMAND test_mpi_basic)
