@@ -36,6 +36,7 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/lib/eigen
     ${CMAKE_SOURCE_DIR}/lib/pugixml
     ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+    ${CMAKE_SOURCE_DIR}/lib/nlohmann
 )
 
 # spdlog库配置（需要编译部分源文件）

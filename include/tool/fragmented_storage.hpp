@@ -15,6 +15,7 @@
 #include <memory>
 #include <functional>
 #include <cstdint>
+#include <optional>
 
 namespace tool {
 

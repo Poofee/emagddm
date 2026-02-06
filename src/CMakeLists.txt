@@ -61,12 +61,13 @@ add_library(tool_lib
     tool/file_utils.cpp
     tool/project_data.cpp
     tool/project_manager.cpp
+    # 暂时禁用编译问题模块，待修复后启用
     # tool/project_validator.cpp
     # tool/association_map.cpp
     # tool/format_adapter.cpp
-    # tool/fragmented_storage.cpp
-    # tool/operation_logger.cpp
-    # tool/version_manager.cpp
+    tool/fragmented_storage.cpp
+    tool/operation_logger.cpp
+    tool/version_manager.cpp
 )
 
 target_include_directories(tool_lib
@@ -84,6 +85,7 @@ target_link_libraries(tool_lib
 target_include_directories(tool_lib PRIVATE
     ${CMAKE_SOURCE_DIR}/lib/spdlog/include
     ${CMAKE_SOURCE_DIR}/lib/pugixml/src
+    ${CMAKE_SOURCE_DIR}/lib/nlohmann
 )
 
 # 应用层模块

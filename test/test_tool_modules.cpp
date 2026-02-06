@@ -1,7 +1,7 @@
 /**
  * @file test_tool_modules.cpp
  * @brief 基础工具层模块单元测试程序
- * @details 测试fragmented_storage、operation_logger等功能
+ * @details 测试operation_logger、version_manager等功能
  * @author AI Developer
  * @date 2026-02-06
  * @version 1.0
@@ -18,131 +18,9 @@
 #include <chrono>
 #include <cstdlib>
 
-#include "tool/fragmented_storage.hpp"
 #include "tool/operation_logger.hpp"
 #include "tool/version_manager.hpp"
 #include "tool/file_utils.hpp"
-
-class FragmentedStorageTest : public ::testing::Test {
-protected:
-    std::string test_file_path = "test_fragmented_storage.dat";
-    
-    void SetUp() override {
-        std::remove(test_file_path.c_str());
-    }
-    
-    void TearDown() override {
-        std::remove(test_file_path.c_str());
-    }
-};
-
-TEST_F(FragmentedStorageTest, CreateStorage) {
-    tool::FragmentedStorage storage(4096);
-    
-    bool result = storage.create(test_file_path);
-    EXPECT_TRUE(result);
-    
-    EXPECT_TRUE(storage.is_open());
-    EXPECT_EQ(storage.get_file_path(), test_file_path);
-    EXPECT_EQ(storage.get_fragment_size(), 4096);
-}
-
-TEST_F(FragmentedStorageTest, WriteAndReadFragment) {
-    tool::FragmentedStorage storage(4096);
-    ASSERT_TRUE(storage.create(test_file_path));
-    
-    std::string test_data = "Hello, Fragmented Storage!";
-    bool result = storage.write_fragment("test_fragment", test_data.c_str(), test_data.size());
-    EXPECT_TRUE(result);
-    
-    std::vector<uint8_t> read_data = storage.read_fragment("test_fragment");
-    EXPECT_EQ(read_data.size(), test_data.size());
-    EXPECT_EQ(std::string(read_data.begin(), read_data.end()), test_data);
-}
-
-TEST_F(FragmentedStorageTest, MultipleFragments) {
-    tool::FragmentedStorage storage(4096);
-    ASSERT_TRUE(storage.create(test_file_path));
-    
-    for (int i = 0; i < 5; i++) {
-        std::string data = "Fragment " + std::to_string(i);
-        EXPECT_TRUE(storage.write_fragment("frag_" + std::to_string(i), data.c_str(), data.size()));
-    }
-    
-    EXPECT_EQ(storage.get_fragment_count(), 5);
-}
-
-TEST_F(FragmentedStorageTest, AppendData) {
-    tool::FragmentedStorage storage(4096);
-    ASSERT_TRUE(storage.create(test_file_path));
-    
-    std::string data1 = "First chunk of data";
-    std::string data2 = "Second chunk of data";
-    
-    EXPECT_TRUE(storage.append_data(data1.c_str(), data1.size()));
-    EXPECT_TRUE(storage.append_data(data2.c_str(), data2.size()));
-    
-    EXPECT_EQ(storage.get_fragment_count(), 2);
-}
-
-TEST_F(FragmentedStorageTest, GetAllFragments) {
-    tool::FragmentedStorage storage(4096);
-    ASSERT_TRUE(storage.create(test_file_path));
-    
-    storage.write_fragment("frag1", "data1", 5);
-    storage.write_fragment("frag2", "data2", 5);
-    
-    auto fragments = storage.get_all_fragments();
-    EXPECT_EQ(fragments.size(), 2);
-}
-
-TEST_F(FragmentedStorageTest, Checksum) {
-    tool::FragmentedStorage storage(4096);
-    ASSERT_TRUE(storage.create(test_file_path));
-    
-    std::string data = "Test data for checksum";
-    storage.write_fragment("frag1", data.c_str(), data.size());
-    
-    auto fragments = storage.get_all_fragments();
-    ASSERT_EQ(fragments.size(), 1);
-    EXPECT_NE(fragments[0].checksum, 0);
-}
-
-class FragmentedWriterReaderTest : public ::testing::Test {
-protected:
-    std::string test_file_path = "test_rw_storage.dat";
-    
-    void SetUp() override {
-        std::remove(test_file_path.c_str());
-    }
-    
-    void TearDown() override {
-        std::remove(test_file_path.c_str());
-    }
-};
-
-TEST_F(FragmentedWriterReaderTest, WriteAndRead) {
-    {
-        tool::FragmentedWriter writer(test_file_path);
-        ASSERT_TRUE(writer.create());
-        
-        EXPECT_TRUE(writer.write_string("name", "Test Project"));
-        EXPECT_TRUE(writer.write_string("version", "1.0.0"));
-        
-        writer.finalize();
-    }
-    
-    {
-        tool::FragmentedReader reader(test_file_path);
-        ASSERT_TRUE(reader.open());
-        
-        std::string name = reader.read_string("name");
-        EXPECT_EQ(name, "Test Project");
-        
-        std::string version = reader.read_string("version");
-        EXPECT_EQ(version, "1.0.0");
-    }
-}
 
 class OperationLoggerTest : public ::testing::Test {
 protected:

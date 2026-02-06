@@ -31,7 +31,6 @@ struct ValidationError {
     std::string data_type;
     std::string entity_id;
     std::string field_name;
-    SeverityLevel severity = SeverityLevel::ERROR;
     
     enum class SeverityLevel {
         INFO,
@@ -39,6 +38,8 @@ struct ValidationError {
         ERROR,
         FATAL
     };
+    
+    SeverityLevel severity = SeverityLevel::ERROR;
     
     std::string to_string() const;
 };

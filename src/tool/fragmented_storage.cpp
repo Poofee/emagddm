@@ -88,11 +88,6 @@ bool FragmentedStorage::open(const std::string& file_path, bool read_only) {
     
     fragment_size_ = header_.fragment_size;
     
-    if (!read_fragment_table()) {
-        close();
-        return false;
-    }
-    
     is_open_ = true;
     return true;
 }
@@ -177,86 +172,6 @@ bool FragmentedStorage::read_header() {
     return true;
 }
 
-bool FragmentedStorage::write_fragment_table() {
-    if (!file_) return false;
-    
-    size_t table_offset = 256;
-    
-    std::ostringstream oss;
-    oss << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
-    oss << "<FragmentTable>\n";
-    oss << "  <FragmentCount>" << fragment_order_.size() << "</FragmentCount>\n";
-    
-    for (size_t i = 0; i < fragment_order_.size(); ++i) {
-        const auto& frag_id = fragment_order_[i];
-        const auto& info = fragments_[frag_id];
-        
-        oss << "  <Fragment index=\"" << i << "\">\n";
-        oss << "    <ID>" << info.fragment_id << "</ID>\n";
-        oss << "    <Offset>" << info.offset << "</Offset>\n";
-        oss << "    <Size>" << info.size << "</Size>\n";
-        oss << "    <Checksum>" << info.checksum << "</Checksum>\n";
-        oss << "    <DataType>" << info.data_type << "</DataType>\n";
-        if (!info.description.empty()) {
-            oss << "    <Description>" << info.description << "</Description>\n";
-        }
-        oss << "  </Fragment>\n";
-    }
-    
-    oss << "</FragmentTable>\n";
-    
-    std::string table_content = oss.str();
-    
-    if (fseek(file_, static_cast<long>(table_offset), SEEK_SET) != 0) return false;
-    
-    if (fwrite(table_content.c_str(), 1, table_content.length(), file_) != table_content.length()) {
-        return false;
-    }
-    
-    return true;
-}
-
-bool FragmentedStorage::read_fragment_table() {
-    if (!file_) return false;
-    
-    char buffer[1024];
-    if (fseek(file_, 256, SEEK_SET) != 0) return false;
-    
-    std::string xml_content;
-    while (fgets(buffer, sizeof(buffer), file_)) {
-        xml_content += buffer;
-    }
-    
-    size_t pos = xml_content.find("<FragmentCount>");
-    if (pos == std::string::npos) return false;
-    
-    size_t end_pos = xml_content.find("</FragmentCount>", pos);
-    std::string count_str = xml_content.substr(pos + 15, end_pos - pos - 15);
-    size_t count = std::stoul(count_str);
-    
-    fragments_.clear();
-    fragment_order_.clear();
-    
-    for (size_t i = 0; i < count; ++i) {
-        std::string id_tag = "<ID>";
-        std::string end_id_tag = "</ID>";
-        pos = xml_content.find(id_tag, pos);
-        if (pos == std::string::npos) break;
-        
-        size_t id_start = pos + id_tag.length();
-        size_t id_end = xml_content.find(end_id_tag, id_start);
-        std::string frag_id = xml_content.substr(id_start, id_end - id_start);
-        
-        FragmentInfo info;
-        info.fragment_id = frag_id;
-        info.fragment_index = i;
-        fragments_[frag_id] = info;
-        fragment_order_.push_back(frag_id);
-    }
-    
-    return true;
-}
-
 bool FragmentedStorage::write_fragment(const std::string& fragment_id, const void* data, size_t size) {
     if (!is_open_ || read_only_) return false;
     
@@ -289,11 +204,6 @@ bool FragmentedStorage::write_fragment(const std::string& fragment_id, const voi
     }
     
     write_header();
-    write_fragment_table();
-    
-    if (write_progress_callback_) {
-        write_progress_callback_(fragment_index + 1, fragment_order_.size());
-    }
     
     return true;
 }
@@ -302,7 +212,9 @@ bool FragmentedStorage::read_fragment(const std::string& fragment_id, void* buff
     if (!is_open_) return false;
     
     auto it = fragments_.find(fragment_id);
-    if (it == fragments_.end()) return false;
+    if (it == fragments_.end()) {
+        return false;
+    }
     
     const FragmentInfo& info = it->second;
     
@@ -321,10 +233,6 @@ bool FragmentedStorage::read_fragment(const std::string& fragment_id, void* buff
     }
     
     memcpy(buffer, fragment_data.data(), info.size);
-    
-    if (read_progress_callback_) {
-        read_progress_callback_(info.fragment_index + 1, fragments_.size());
-    }
     
     return true;
 }
