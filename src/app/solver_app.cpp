@@ -1,62 +1,96 @@
 /**
  * @file solver_app.cpp
- * @brief 应用层 - 求解器应用模块源文件
+ * @brief 应用层 - 求解器应用模块实现
+ * @details 核心流程：输入文件 → ProjectManager（内部自动选择加载器） → 求解
  * @author Poofee
- * @date 2026-XX-XX
- * @version 1.0
+ * @date 2026-04-04
+ * @version 5.0
  */
 
 #include "solver_app.hpp"
-#include "logger.hpp"
+#include "logger_factory.hpp"
 
 namespace app {
 
-SolverApp::SolverApp() : initialized_(false) {
+SolverApp::SolverApp() : initialized_(false), project_manager_(tool::ProjectManager::getInstance()) {
 }
 
 SolverApp::~SolverApp() {
     cleanup();
 }
 
-bool SolverApp::initialize(const std::string& config_file) {
-    if (config_file.empty()) {
+bool SolverApp::initialize(const std::string& input_file) {
+    if (input_file.empty()) {
+        FEEM_ERROR("输入文件路径为空");
         return false;
     }
-    
-    // 初始化日志系统
-    if (!tool::Logger::getInstance().initialize("output/log/solver.log")) {
+
+    input_file_ = input_file;
+
+    FEEM_INFO("========================================");
+    FEEM_INFO("正在打开项目文件: {}", input_file);
+    FEEM_INFO("========================================");
+
+    if (!project_manager_.openProject(input_file)) {
+        FEEM_ERROR("项目打开失败: {}", project_manager_.getLastError());
         return false;
     }
-    
-    tool::Logger::getInstance().info("求解器应用初始化开始");
-    
-    // TODO: 加载配置文件
-    // TODO: 初始化各模块
-    
+
     initialized_ = true;
-    tool::Logger::getInstance().info("求解器应用初始化完成");
-    
+
+    // 输出加载结果摘要
+    FEEM_INFO("");
+    FEEM_INFO("========================================");
+    FEEM_INFO("数据加载完成摘要:");
+    FEEM_INFO("  项目名称: {}", project_manager_.getProjectName());
+    FEEM_INFO("  材料数量: {}", project_manager_.getAllMaterials().size());
+    FEEM_INFO("  边界条件数量: {}", project_manager_.getAllBoundaries().size());
+    FEEM_INFO("  激励源数量: {}", project_manager_.getAllExcitations().size());
+    FEEM_INFO("  求解设置数量: {}", project_manager_.getAllSolutionSetups().size());
+    FEEM_INFO("========================================");
+
     return true;
 }
 
 bool SolverApp::run() {
     if (!initialized_) {
-        tool::Logger::getInstance().err("求解器应用未初始化，无法运行");
+        FEEM_ERROR("求解器应用未初始化，无法运行");
         return false;
     }
-    
-    tool::Logger::getInstance().info("求解器开始运行");
-    
-    // TODO: 实现FETI-DP求解流程
-    
-    tool::Logger::getInstance().info("求解器运行完成");
-    
+
+    FEEM_INFO("========================================");
+    FEEM_INFO("开始FETI-DP电磁场求解");
+    FEEM_INFO("========================================");
+
+    // 步骤1：根据已加载的项目数据进行网格生成/导入
+    FEEM_INFO("");
+    FEEM_INFO("[步骤1] 网格生成/导入...");
+    // TODO: 使用 project_manager_ 中的几何和网格设置生成有限元网格
+
+    // 步骤2：组装有限元矩阵
+    FEEM_INFO("[步骤2] 组装刚度矩阵...");
+    // TODO: 遍历 project_manager_ 的材料、边界条件等，组装全局刚度矩阵 K 和载荷向量 F
+
+    // 步骤3：执行FETI-DP迭代求解
+    FEEM_INFO("[步骤3] FETI-DP迭代求解...");
+    // TODO: 子域分解、界面预处理、共轭梯度迭代
+
+    // 步骤4：输出求解结果
+    FEEM_INFO("[步骤4] 输出求解结果...");
+    // TODO: 计算场量（磁通密度B、磁场强度H等），写入结果文件
+
+    FEEM_INFO("");
+    FEEM_INFO("========================================");
+    FEEM_INFO("求解完成（核心求解流程待实现）");
+    FEEM_INFO("========================================");
+
     return true;
 }
 
 void SolverApp::cleanup() {
     if (initialized_) {
-        tool::Logger::getInstance().info("清理求解器应用资源");
+        FEEM_INFO("清理求解器应用资源");
+        project_manager_.closeProject();
         initialized_ = false;
     }
 }

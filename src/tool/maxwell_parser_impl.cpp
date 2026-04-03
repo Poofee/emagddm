@@ -10,6 +10,7 @@
 #include "tool/logger_factory.hpp"
 #include <algorithm>
 #include <filesystem>
+#include <fstream>
 
 namespace tool {
 
@@ -846,6 +847,64 @@ nlohmann::json MaxwellParserImpl::blockToJson(const std::shared_ptr<fe_em::tool:
     result["children"] = children;
     
     return result;
+}
+
+std::string MaxwellParserImpl::extractPreviewImage() const {
+    std::ifstream file(file_path_);
+    if (!file.is_open()) {
+        FEEM_WARN("无法打开AEDT文件: {}", file_path_);
+        return "";
+    }
+    
+    std::string line;
+    std::string base64_data;
+    bool in_image_section = false;  // 标记是否正在读取图像数据区域
+    
+    while (std::getline(file, line)) {
+        // 检测Image64字段的起始位置
+        if (line.find("Image64='") != std::string::npos) {
+            in_image_section = true;
+            // 提取起始行中的数据部分（跳过"Image64='"前缀）
+            size_t start_pos = line.find("Image64='") + 9;
+            base64_data = line.substr(start_pos);
+            
+            // 如果起始行以单引号结尾，说明数据在同一行内完成
+            if (!base64_data.empty() && base64_data.back() == '\'') {
+                base64_data.pop_back();
+                break;
+            }
+            continue;
+        }
+        
+        // 在图像数据区域内继续收集后续行的数据
+        if (in_image_section) {
+            for (char c : line) {
+                // 单引号表示数据结束
+                if (c == '\'') {
+                    in_image_section = false;
+                    break;
+                }
+                // 过滤掉转义字符和换行符
+                if (c != '\\' && c != '\n' && c != '\r') {
+                    base64_data += c;
+                }
+            }
+            // 数据已完整提取
+            if (!in_image_section) {
+                break;
+            }
+        }
+    }
+    
+    file.close();
+    
+    if (base64_data.empty()) {
+        FEEM_DEBUG("AEDT文件中未找到预览图像数据");
+    } else {
+        FEEM_DEBUG("成功提取预览图像Base64数据，长度: {} 字符", base64_data.size());
+    }
+    
+    return base64_data;
 }
 
 } // namespace tool

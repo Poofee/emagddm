@@ -1,9 +1,10 @@
 /**
  * @file base64_utils.hpp
  * @brief Base64编码/解码工具
+ * @details 提供通用的Base64编解码和图像类型检测功能
  * @author AI Developer
  * @date 2026-04-03
- * @version 1.0
+ * @version 2.0
  */
 
 #pragma once
@@ -17,7 +18,7 @@ namespace fe_em {
 namespace tool {
 
 /**
- * @brief Base64编解码工具类
+ * @brief Base64编解码工具类（通用工具，不依赖特定文件格式）
  */
 class Base64Utils {
 public:
@@ -119,7 +120,7 @@ public:
     }
     
     /**
-     * @brief 检测图像类型
+     * @brief 检测图像类型（根据二进制头判断）
      * @param data 图像二进制数据
      * @return 图像文件扩展名（如".jpg", ".png"等）
      */

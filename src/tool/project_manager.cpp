@@ -4,6 +4,7 @@
  */
 
 #include "tool/project_manager.hpp"
+#include "tool/project_loader.hpp"
 #include "tool/logger_factory.hpp"
 #include <fstream>
 #include <sstream>
@@ -52,6 +53,7 @@ bool ProjectManager::createProject(const std::string& name, const std::string& f
     excitations_.clear();
     mesh_.reset();
     solution_setups_.clear();
+    loader_.reset();
 
     notifyListeners(ProjectState::CLOSING, state_);
     FEEM_INFO("Project '{}' created successfully", name);
@@ -76,20 +78,15 @@ bool ProjectManager::openProject(const std::string& file_path) {
         }
     }
 
-    std::string ext = file_utils::getExtension(file_path);
-    bool success = false;
-
-    if (ext == ".emat" || ext == ".EMAT") {
-        success = loadFromXML(file_path);
-    } else if (ext == ".aedt" || ext == ".AEDT") {
-        success = importAEDTFile(file_path);
-    } else if (ext == ".emf" || ext == ".EMF") {
-        success = importEMFFile(file_path);
-    } else {
-        last_error_ = "Unsupported project file format: " + ext;
+    loader_ = createProjectLoader(file_path);
+    if (!loader_) {
+        last_error_ = "Unsupported file format: " + file_utils::getExtension(file_path);
         FEEM_ERROR(last_error_);
         return false;
     }
+
+    loader_->setFilePath(file_path);
+    bool success = loader_->load(*this);
 
     if (success) {
         is_open_ = true;
@@ -122,25 +119,16 @@ bool ProjectManager::saveProject(const std::string& file_path) {
     }
 
     std::string ext = file_utils::getExtension(target_path);
-    bool success = false;
 
     if (ext == ".emat" || ext == ".EMAT") {
-        success = saveToXML(target_path);
+        last_error_ = "EMAT save not supported yet (requires XmlProjectLoader)";
+        FEEM_ERROR(last_error_);
+        return false;
     } else {
         last_error_ = "Unsupported file format for saving: " + ext;
         FEEM_ERROR(last_error_);
         return false;
     }
-
-    if (success) {
-        project_file_path_ = target_path;
-        is_modified_ = false;
-        state_ = ProjectState::SAVED;
-        notifyListeners(ProjectState::MODIFIED, state_);
-        FEEM_INFO("Project saved to '{}'", target_path);
-    }
-
-    return success;
 }
 
 bool ProjectManager::closeProject() {
@@ -169,128 +157,6 @@ bool ProjectManager::closeProject() {
     state_ = ProjectState::CLOSING;
 
     FEEM_INFO("Project closed");
-    return true;
-}
-
-bool ProjectManager::loadFromXML(const std::string& file_path) {
-    XmlDocument doc;
-    if (!doc.loadFromFile(file_path)) {
-        last_error_ = "Failed to load XML file: " + file_path;
-        return false;
-    }
-
-    XmlNode root = doc.getRootNode();
-    if (!root.isValid()) {
-        last_error_ = "Invalid XML document structure";
-        return false;
-    }
-
-    std::string root_name = root.getName();
-    if (root_name != "MaxwellProject" && root_name != "Project") {
-        last_error_ = "Invalid project file format";
-        return false;
-    }
-
-    auto version_attr = root.getAttribute("Version");
-    if (version_attr.has_value()) {
-        file_version_ = stringToMaxwellVersion(version_attr.value());
-    }
-
-    auto name_node = root.getChild("Name");
-    if (name_node.isValid()) {
-        project_name_ = name_node.getText();
-    }
-
-    auto design_node = root.getChild("Design");
-    if (design_node.isValid()) {
-        auto dim_node = design_node.getChild("Dimension");
-        if (dim_node.isValid()) {
-            std::string dim_str = dim_node.getText();
-            try {
-                design_type_ = stringToDimType(dim_str);
-            } catch (...) {
-                design_type_ = DimType::D3;
-            }
-        }
-    }
-
-    auto materials_node = root.getChild("Materials");
-    if (materials_node.isValid()) {
-        auto material_nodes = materials_node.getChildren("Material");
-        for (const auto& mat_node : material_nodes) {
-            std::string mat_name = mat_node.getName();
-            auto name_attr = mat_node.getAttribute("Name");
-            if (name_attr.has_value()) {
-                mat_name = name_attr.value();
-            }
-
-            auto material = std::make_shared<Material>(mat_name);
-
-            auto type_node = mat_node.getChild("Type");
-            if (type_node.isValid()) {
-                std::string type_str = type_node.getText();
-                try {
-                    material->setType(stringToMatType(type_str));
-                } catch (...) {}
-            }
-
-            auto mu_node = mat_node.getChild("RelativePermeability");
-            if (mu_node.isValid()) {
-                try {
-                    double mu_r = std::stod(mu_node.getText());
-                    material->setRelativePermeability(mu_r);
-                } catch (...) {}
-            }
-
-            auto sigma_node = mat_node.getChild("Conductivity");
-            if (sigma_node.isValid()) {
-                try {
-                    double sigma = std::stod(sigma_node.getText());
-                    material->setConductivity(sigma);
-                } catch (...) {}
-            }
-
-            materials_[mat_name] = material;
-        }
-    }
-
-    return true;
-}
-
-bool ProjectManager::saveToXML(const std::string& file_path) {
-    XmlDocument doc;
-    doc.createNew("MaxwellProject");
-    XmlNode root = doc.getRootNode();
-    root.setAttribute("Version", getVersion());
-
-    XmlNode name_node = root.appendChild("Name");
-    name_node.setText(project_name_);
-
-    XmlNode design_node = root.appendChild("Design");
-    XmlNode dim_node = design_node.appendChild("Dimension");
-    dim_node.setText(dimTypeToString(design_type_));
-
-    XmlNode materials_node = root.appendChild("Materials");
-    for (const auto& pair : materials_) {
-        XmlNode mat_node = materials_node.appendChild("Material");
-        mat_node.setAttribute("Name", pair.first);
-        mat_node.setAttribute("ID", std::to_string(pair.second->getID()));
-
-        XmlNode type_node = mat_node.appendChild("Type");
-        type_node.setText(matTypeToString(pair.second->getType()));
-
-        XmlNode mu_node = mat_node.appendChild("RelativePermeability");
-        mu_node.setText(std::to_string(pair.second->getRelativePermeability()));
-
-        XmlNode sigma_node = mat_node.appendChild("Conductivity");
-        sigma_node.setText(std::to_string(pair.second->getConductivity()));
-    }
-
-    if (!doc.saveToFile(file_path, true)) {
-        last_error_ = "Failed to save XML file: " + file_path;
-        return false;
-    }
-
     return true;
 }
 
@@ -430,31 +296,6 @@ void ProjectManager::unregisterProjectListener(std::function<void(ProjectState, 
             [&listener](const auto& l) { return l.target_type() == listener.target_type(); }),
         listeners_.end()
     );
-}
-
-bool ProjectManager::importMaxwellFile(const std::string& file_path) {
-    std::string ext = file_utils::getExtension(file_path);
-    if (ext == ".aedt" || ext == ".AEDT") {
-        return importAEDTFile(file_path);
-    } else if (ext == ".emf" || ext == ".EMF") {
-        return importEMFFile(file_path);
-    }
-    last_error_ = "Unsupported Maxwell file format: " + ext;
-    return false;
-}
-
-bool ProjectManager::importAEDTFile(const std::string& file_path) {
-    (void)file_path;
-    FEEM_INFO("AEDT file import not fully implemented yet");
-    last_error_ = "AEDT import requires additional implementation";
-    return false;
-}
-
-bool ProjectManager::importEMFFile(const std::string& file_path) {
-    (void)file_path;
-    FEEM_INFO("EMF file import not fully implemented yet");
-    last_error_ = "EMF import requires additional implementation";
-    return false;
 }
 
 std::string ProjectManager::getVersionString() {

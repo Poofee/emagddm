@@ -12,6 +12,7 @@
 #include "tool/project_data.hpp"
 #include "tool/file_utils.hpp"
 #include "tool/xml_interface.hpp"
+#include "tool/project_loader.hpp"
 #include "tool/em_exception.hpp"
 #include <string>
 #include <memory>
@@ -78,10 +79,6 @@ public:
     MaxwellVersion getFileVersion() const { return file_version_; }
     void setFileVersion(MaxwellVersion version) { file_version_ = version; }
 
-    bool importMaxwellFile(const std::string& file_path);
-    bool importAEDTFile(const std::string& file_path);
-    bool importEMFFile(const std::string& file_path);
-
     std::string getLastError() const { return last_error_; }
 
     static std::string getVersionString();
@@ -92,9 +89,6 @@ private:
     ~ProjectManager();
     ProjectManager(const ProjectManager&) = delete;
     ProjectManager& operator=(const ProjectManager&) = delete;
-
-    bool loadFromXML(const std::string& file_path);
-    bool saveToXML(const std::string& file_path);
 
     bool validateProject();
     void notifyListeners(ProjectState old_state, ProjectState new_state);
@@ -118,6 +112,7 @@ private:
 
     std::vector<std::function<void(ProjectState, ProjectState)>> listeners_;
     std::string last_error_;
+    std::unique_ptr<IProjectLoader> loader_;       ///< 内部加载器（格式相关，openProject时自动创建）
 
     static constexpr const char* CURRENT_VERSION = "1.0";
 };

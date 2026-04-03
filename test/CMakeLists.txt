@@ -174,47 +174,7 @@ target_link_libraries(test_tool_modules
         GTest::gtest_main
 )
 
-# Maxwell转换器测试
-add_executable(test_maxwell_converter
-    test_maxwell_converter.cpp
-)
-
-target_include_directories(test_maxwell_converter
-    PRIVATE
-        ${CMAKE_SOURCE_DIR}/include
-        ${CMAKE_SOURCE_DIR}/lib/pugixml/src
-)
-
-target_link_libraries(test_maxwell_converter
-    PRIVATE
-        tool_lib
-        spdlog_lib
-        pugixml_lib
-        GTest::gtest
-        GTest::gtest_main
-)
-
-# Maxwell转换器主测试
-add_executable(test_maxwell_converter_main
-    test_maxwell_converter_main.cpp
-)
-
-target_include_directories(test_maxwell_converter_main
-    PRIVATE
-        ${CMAKE_SOURCE_DIR}/include
-        ${CMAKE_SOURCE_DIR}/lib/pugixml/src
-)
-
-target_link_libraries(test_maxwell_converter_main
-    PRIVATE
-        tool_lib
-        spdlog_lib
-        pugixml_lib
-        GTest::gtest
-        GTest::gtest_main
-)
-
-# MPI/OpenMP基础测试
+# Maxwell解析器测试
 # OpenMP基础测试
 add_executable(test_omp_basic
     test_omp_basic.cpp

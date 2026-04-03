@@ -22,9 +22,6 @@
 
 namespace tool {
 
-// 前向声明
-class ProjectData;
-
 /**
  * @brief 序列化接口
  * @details 提供JSON和二进制序列化功能
@@ -73,8 +70,6 @@ public:
      */
     virtual bool validate() const = 0;
 };
-
-class ProjectData;
 
 using MaterialPtr = std::shared_ptr<class Material>;
 using GeometryPtr = std::shared_ptr<class Geometry>;

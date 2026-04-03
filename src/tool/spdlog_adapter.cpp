@@ -23,7 +23,6 @@ public:
     ~Impl() {
         try {
             if (logger_) {
-                logger_->flush();
                 logger_.reset();
             }
         } catch (...) {
@@ -37,14 +36,15 @@ public:
             // 控制台输出
             if (console_output) {
                 auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-                console_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [%n] %v");
+                console_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l] %v");
+                console_sink->set_color_mode(spdlog::color_mode::always);
                 sinks.push_back(console_sink);
             }
             
             // 文件输出
             if (!log_file.empty()) {
                 auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(log_file, true);
-                file_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] [%n] %v");
+                file_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] %v");
                 sinks.push_back(file_sink);
             }
             
@@ -63,7 +63,7 @@ public:
             // 如果初始化失败，尝试创建简单的控制台日志器
             try {
                 logger_ = spdlog::stdout_color_mt("fetidp");
-                logger_->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [%n] %v");
+                logger_->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l] %v");
                 logger_->set_level(spdlog::level::info);
                 initialized_ = true;
                 return true;

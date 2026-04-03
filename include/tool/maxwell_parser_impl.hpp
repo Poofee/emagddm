@@ -9,7 +9,8 @@ namespace tool {
 
 /**
  * @brief Maxwell解析器实现类
- * @details 基于maxwell_parser::MaxwellParser实现IMaxwellParser接口
+ * @details 基于maxwell_parser::MaxwellParser实现IMaxwellParser接口，
+ *          负责AEDT文件的全部解析工作，包括项目数据、预览图像等
  */
 class MaxwellParserImpl : public IMaxwellParser {
 private:
@@ -175,6 +176,16 @@ public:
      * @return 完整项目数据
      */
     nlohmann::json parseAllData() override;
+
+    /**
+     * @brief 提取AEDT文件中的预览图像（Base64编码）
+     * 
+     * AEDT文件中的图像数据存储在 Image64='...' 属性中，可能跨越多行。
+     * 本函数负责定位并提取完整的Base64字符串。
+     * 
+     * @return Base64编码的图像数据，失败返回空字符串
+     */
+    std::string extractPreviewImage() const;
     
     /**
      * @brief 获取解析器实例（用于调试）

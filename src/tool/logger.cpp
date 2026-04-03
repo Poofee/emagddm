@@ -33,12 +33,10 @@ Logger::Logger(LoggerType type) : logger_type_(type), initialized_(false) {
 Logger::~Logger() {
     try {
         if (logger_impl_ && initialized_) {
-            logger_impl_->flush();  // 刷新缓冲区确保日志完整写入
+            logger_impl_.reset();
         }
-        logger_impl_.reset();      // 释放实现对象
-        initialized_ = false;       // 标记未初始化状态
+        initialized_ = false;
     } catch (...) {
-        // 析构函数禁止抛出异常，静默处理所有错误
     }
 }
 
