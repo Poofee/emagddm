@@ -21,8 +21,12 @@ public:
     Impl() : logger_(nullptr), initialized_(false) {}
     
     ~Impl() {
-        if (logger_) {
-            spdlog::drop(logger_->name());
+        try {
+            if (logger_) {
+                logger_->flush();
+                logger_.reset();
+            }
+        } catch (...) {
         }
     }
     

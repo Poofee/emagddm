@@ -4,7 +4,7 @@
  * @details 提供统一的日志接口抽象，支持多种日志库实现（spdlog、glog等）
  * @author Poofee
  * @date 2026-XX-XX
- * @version 1.0
+ * @version 2.0
  */
 
 #pragma once

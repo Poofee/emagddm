@@ -129,6 +129,9 @@ target_include_directories(fetidp_solver
     PRIVATE
         ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_SOURCE_DIR}/include/app
+        ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/lib/pugixml/src
+        ${CMAKE_SOURCE_DIR}/lib/nlohmann
 )
 
 # 链接依赖库
@@ -139,4 +142,6 @@ target_link_libraries(fetidp_solver
         fetidp_lib
         numeric_lib
         tool_lib
+        spdlog_lib
+        pugixml_lib
 )

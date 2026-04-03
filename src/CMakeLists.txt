@@ -69,6 +69,7 @@ add_library(tool_lib
     tool/log_interface.cpp
     tool/spdlog_adapter.cpp
     tool/logger.cpp
+    tool/logger_factory.cpp
     tool/xml_interface.cpp
     tool/em_enums.cpp
     tool/em_exception.cpp
@@ -123,6 +124,8 @@ target_include_directories(app_lib
     PRIVATE
         ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_SOURCE_DIR}/include/app
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+        ${CMAKE_SOURCE_DIR}/lib/nlohmann
 )
 
 target_link_libraries(app_lib
