@@ -14,6 +14,9 @@ namespace maxwell_parser {
 const std::regex BLOCK_BEGIN_PATTERN(R"(\s*\$begin\s+'(.*?)'\s*)");
 const std::regex BLOCK_END_PATTERN(R"(\s*\$end\s+'(.*?)'\s*)");
 const std::regex PROPERTY_PATTERN(R"(\s*(\w+)\s*=\s*(.*)\s*)");
+const std::regex QUOTED_PROPERTY_PATTERN(R"(\s*'([^']+)'\s*=\s*(.*)\s*)");
+const std::regex FUNCTION_CALL_PATTERN(R"(\s*(\w+)\s*\(([^)]*)\)\s*)");
+const std::regex NAME_CALL_PATTERN(R"(\s*Name\s*\(\s*'([^']+)'\s*\)\s*)");
 const std::regex FUNCTION_PATTERN(R"(\s*(\w+)\s*\((.*?)\)\s*)");
 const std::regex ARRAY_PATTERN(R"(\s*\[(\d+):\s*(.*)\]\s*)");
 const std::regex SET_PATTERN(R"(\s*set\((.*)\)\s*)");
@@ -48,12 +51,18 @@ bool MaxwellParser::parse_file(const std::string& file_path) {
 }
 
 bool MaxwellParser::parse_content(const std::string& content) {
+    // 先保存内容，再清空
+    std::string saved_content = content;
     clear();
-    file_content_ = content;
+    file_content_ = std::move(saved_content);
     
     try {
         // 预处理内容
         preprocess_content();
+        
+        if (lines_.empty()) {
+            throw ParseError("文件内容为空", 0);
+        }
         
         // 开始解析
         current_line_ = 0;
@@ -170,7 +179,11 @@ std::shared_ptr<BlockNode> MaxwellParser::parse_block() {
             Property prop = parse_property();
             block->add_property(prop);
         } catch (const ParseError& e) {
-            // 如果不是属性，可能是其他内容，跳过
+            // 如果不是属性，检查是否是特殊行（如只有值没有名称的行）
+            // 或者是其他无法识别的格式，跳过该行
+            current_line_++;
+        } catch (const std::exception& e) {
+            // 捕获其他异常，跳过该行
             current_line_++;
         }
     }
@@ -186,41 +199,74 @@ Property MaxwellParser::parse_property() {
     std::string line = lines_[current_line_];
     std::smatch match;
     
-    if (!std::regex_match(line, match, PROPERTY_PATTERN)) {
+    std::string prop_name;
+    std::string value_str;
+    bool is_function_call = false;
+    
+    // 按优先级尝试匹配不同的属性格式
+    
+    // 1. 尝试普通属性 name = value
+    if (std::regex_match(line, match, PROPERTY_PATTERN)) {
+        prop_name = match[1];
+        value_str = match[2];
+    }
+    // 2. 尝试带引号的属性名 'name' = value
+    else if (std::regex_match(line, match, QUOTED_PROPERTY_PATTERN)) {
+        prop_name = match[1];
+        value_str = match[2];
+    }
+    // 3. 尝试 Name() 特殊形式
+    else if (std::regex_match(line, match, NAME_CALL_PATTERN)) {
+        prop_name = "Name";
+        value_str = "'" + match[1].str() + "'";
+    }
+    // 4. 尝试函数调用形式 name(args)（无等号）
+    else if (std::regex_match(line, match, FUNCTION_CALL_PATTERN)) {
+        prop_name = match[1];
+        value_str = match[0];  // 整个匹配作为值
+        is_function_call = true;
+    }
+    else {
         throw ParseError("无效的属性格式", current_line_ + 1);
     }
     
-    std::string prop_name = match[1];
-    std::string value_str = match[2];
-    
     // 识别数据类型
-    DataType data_type = identify_data_type(value_str);
+    DataType data_type;
     Value value;
     
-    // 根据数据类型解析值
-    switch (data_type) {
-        case DataType::STRING:
-            value = parse_string(value_str);
-            break;
-        case DataType::NUMBER:
-            value = parse_number(value_str);
-            break;
-        case DataType::BOOLEAN:
-            value = parse_boolean(value_str);
-            break;
-        case DataType::ARRAY:
-            value = parse_array(value_str);
-            break;
-        case DataType::FUNCTION:
-            value = parse_function(value_str);
-            break;
-        case DataType::SET:
-            value = parse_set(value_str);
-            break;
-        default:
-            // 默认为字符串
-            value = value_str;
-            break;
+    if (is_function_call) {
+        // 函数调用形式，直接存储为字符串
+        data_type = DataType::FUNCTION;
+        value = value_str;
+    } else {
+        // 正常属性，识别数据类型
+        data_type = identify_data_type(value_str);
+        
+        // 根据数据类型解析值
+        switch (data_type) {
+            case DataType::STRING:
+                value = parse_string(value_str);
+                break;
+            case DataType::NUMBER:
+                value = parse_number(value_str);
+                break;
+            case DataType::BOOLEAN:
+                value = parse_boolean(value_str);
+                break;
+            case DataType::ARRAY:
+                value = parse_array(value_str);
+                break;
+            case DataType::FUNCTION:
+                value = parse_function(value_str);
+                break;
+            case DataType::SET:
+                value = parse_set(value_str);
+                break;
+            default:
+                // 默认为字符串
+                value = value_str;
+                break;
+        }
     }
     
     current_line_++;

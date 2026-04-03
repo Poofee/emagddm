@@ -24,22 +24,70 @@ private:
     /**
      * @brief 从解析树中提取材料数据
      */
-    std::vector<std::shared_ptr<Material>> extractMaterials() const;
+    std::vector<nlohmann::json> extractMaterials() const;
+    
+    /**
+     * @brief 从单个材料块提取完整材料数据
+     * @param material_block 材料块节点
+     * @return 材料JSON数据
+     */
+    nlohmann::json extractSingleMaterial(
+        const std::shared_ptr<fe_em::tool::maxwell_parser::BlockNode>& material_block) const;
+    
+    /**
+     * @brief 从材料块提取磁导率数据（线性或非线性）
+     * @param material_block 材料块节点
+     * @param material 输出JSON对象
+     */
+    void extractPermeability(
+        const std::shared_ptr<fe_em::tool::maxwell_parser::BlockNode>& material_block,
+        nlohmann::json& material) const;
+    
+    /**
+     * @brief 从材料块提取矫顽力数据
+     * @param material_block 材料块节点
+     * @param material 输出JSON对象
+     */
+    void extractMagneticCoercivity(
+        const std::shared_ptr<fe_em::tool::maxwell_parser::BlockNode>& material_block,
+        nlohmann::json& material) const;
+    
+    /**
+     * @brief 从属性中提取双精度数值
+     * @param prop 属性节点
+     * @return 双精度数值
+     */
+    double propertyValueToDouble(const fe_em::tool::maxwell_parser::Property& prop) const;
+    
+    /**
+     * @brief 从属性中提取字符串值
+     * @param prop 属性节点
+     * @return 字符串值
+     */
+    std::string propertyValueToString(const fe_em::tool::maxwell_parser::Property& prop) const;
+    
+    /**
+     * @brief 从Points属性提取BH曲线数据
+     * @param prop Points属性节点
+     * @return BH曲线数据 [[H1,B1], [H2,B2], ...]
+     */
+    std::vector<std::vector<double>> extractBHCurve(
+        const fe_em::tool::maxwell_parser::Property& prop) const;
     
     /**
      * @brief 从解析树中提取边界条件数据
      */
-    std::vector<std::shared_ptr<Boundary>> extractBoundaries() const;
+    std::vector<nlohmann::json> extractBoundaries() const;
     
     /**
      * @brief 从解析树中提取激励源数据
      */
-    std::vector<std::shared_ptr<Excitation>> extractExcitations() const;
+    std::vector<nlohmann::json> extractExcitations() const;
     
     /**
      * @brief 从解析树中提取求解设置数据
      */
-    std::shared_ptr<SolutionSetup> extractSolutionSetup() const;
+    nlohmann::json extractSolutionSetup() const;
     
     /**
      * @brief 从解析树中提取几何数据

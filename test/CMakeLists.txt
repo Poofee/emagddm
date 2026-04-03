@@ -245,6 +245,74 @@ target_link_libraries(test_mpi_basic
         tool_lib
 )
 
+# Maxwell解析器测试
+add_executable(test_maxwell_parser
+    test_maxwell_parser.cpp
+)
+
+target_include_directories(test_maxwell_parser
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_maxwell_parser
+    PRIVATE
+        tool_lib
+        spdlog_lib
+)
+
+# 材料数据提取测试
+add_executable(test_material_extraction
+    test_material_extraction.cpp
+)
+
+target_include_directories(test_material_extraction
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_material_extraction
+    PRIVATE
+        tool_lib
+        spdlog_lib
+)
+
+# AEDT解析验证测试
+add_executable(test_aedt_parsing
+    test_aedt_parsing.cpp
+)
+
+target_include_directories(test_aedt_parsing
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/lib/nlohmann
+)
+
+target_link_libraries(test_aedt_parsing
+    PRIVATE
+        tool_lib
+        spdlog_lib
+        GTest::gtest
+        GTest::gtest_main
+)
+
+# 调试解析器
+add_executable(debug_parser
+    debug_parser.cpp
+)
+
+target_include_directories(debug_parser
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/lib/nlohmann
+)
+
+target_link_libraries(debug_parser
+    PRIVATE
+        tool_lib
+        spdlog_lib
+)
+
 # 启用测试
 enable_testing()
 add_test(NAME test_tool_modules COMMAND test_tool_modules)
@@ -256,3 +324,6 @@ add_test(NAME test_sparse_matrix_gtest_stage1 COMMAND test_sparse_matrix_gtest_s
 add_test(NAME test_sparse_matrix_gtest_stage2 COMMAND test_sparse_matrix_gtest_stage2)
 add_test(NAME test_omp_basic COMMAND test_omp_basic)
 add_test(NAME test_mpi_basic COMMAND test_mpi_basic)
+add_test(NAME test_maxwell_parser COMMAND test_maxwell_parser)
+add_test(NAME test_material_extraction COMMAND test_material_extraction)
+add_test(NAME test_aedt_parsing COMMAND test_aedt_parsing)

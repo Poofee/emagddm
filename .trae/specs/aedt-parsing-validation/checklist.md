@@ -1,0 +1,20 @@
+- [x] MaxwellParser能正确解析Temp.aedt文件（42029行）而不崩溃或抛出异常
+- [x] PROPERTY_PATTERN正则表达式支持带空格/引号的属性名（如`'Conductor number'`、`'N Steps'`）
+- [x] 函数调用形式属性（Version(2024,1), Edges(18), Objects(2331)）被正确解析
+- [x] Name()形式特殊属性（Name('Bt1')）被正确解析
+- [x] extractMaterials()能提取所有材料（>=8种），包括非线性B-H曲线材料
+- [x] copper材料的conductivity=58000000, permeability≈0.999991, mass_density=8933验证通过
+- [x] vacuum材料验证通过
+- [x] B27AV1400_2DSF0.970材料验证通过
+- [x] N45UH永磁体材料的permeability=1.0739096, 矫顽力=-927000 A/m验证通过
+- [x] extractBoundaries()能提取所有边界条件（>=20个）
+- [x] VectorPotential1边界：BoundType="Vector Potential", Value="0"验证通过
+- [x] PhA_0线圈边界：BoundType="Coil", Winding=1, PolarityType="Positive"验证通过
+- [x] extractSolutionSetup()能正确提取Setup1瞬态求解配置
+- [x] Setup1: SetupType="Transient", StopTime="0.025s", TimeStep="0.0001s"验证通过
+- [x] NonlinearSolverResidual="0.0001", FrequencyOfAddedVoltageSource="308.06667Hz"验证通过
+- [x] 项目元数据：Product="ElectronicsDesktop", Version=(2024,1)验证通过
+- [x] 设计名称="quan_ID0x45deg_20C3_temp", SolutionType="Transient", GeometryMode="XY"验证通过
+- [x] ModelDepth="140mm", BackgroundMaterialName="vacuum"验证通过
+- [x] test_aedt_parsing.cpp编译通过
+- [x] 所有测试用例均通过（Google Test运行结果全PASS - 14/14测试通过）

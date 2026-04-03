@@ -106,22 +106,22 @@ $end 'ArrayTest'
     auto int_array_prop = root->find_property("IntArray");
     assert(int_array_prop.has_value() && "IntArray属性未找到");
     
-    auto int_array = std::get<std::vector<Value>>(int_array_prop->value);
+    auto int_array = std::get<std::vector<double>>(int_array_prop->value);
     assert(int_array.size() == 5 && "整数数组大小不匹配");
     
     for (int i = 0; i < 5; ++i) {
-        assert(std::get<double>(int_array[i]) == i + 1 && "整数数组值不匹配");
+        assert(int_array[i] == i + 1 && "整数数组值不匹配");
     }
     
     // 测试浮点数数组
     auto double_array_prop = root->find_property("DoubleArray");
     assert(double_array_prop.has_value() && "DoubleArray属性未找到");
     
-    auto double_array = std::get<std::vector<Value>>(double_array_prop->value);
+    auto double_array = std::get<std::vector<double>>(double_array_prop->value);
     assert(double_array.size() == 3 && "浮点数数组大小不匹配");
     
     for (int i = 0; i < 3; ++i) {
-        assert(std::get<double>(double_array[i]) == i + 1.5 && "浮点数数组值不匹配");
+        assert(double_array[i] == i + 1.5 && "浮点数数组值不匹配");
     }
     
     std::cout << "数组解析测试通过" << std::endl;
@@ -143,24 +143,64 @@ $end 'FunctionTest'
 )";
     
     bool result = parser.parse_content(test_content);
+    std::cout << "解析结果: " << (result ? "成功" : "失败") << std::endl;
+    if (!result) {
+        std::cerr << "错误信息: " << parser.get_error_info() << std::endl;
+    }
     assert(result && "函数和集合解析失败");
     
     auto root = parser.get_root();
+    std::cout << "根节点: " << (root ? "存在" : "不存在") << std::endl;
+    if (!root) {
+        assert(false && "根节点为空");
+        return;
+    }
+    
+    std::cout << "根节点名称: " << root->name << std::endl;
+    std::cout << "属性数量: " << root->properties.size() << std::endl;
     
     // 测试函数调用
     auto func_prop = root->find_property("VersionFunc");
+    std::cout << "VersionFunc 属性: " << (func_prop.has_value() ? "找到" : "未找到") << std::endl;
     assert(func_prop.has_value() && "VersionFunc属性未找到");
-    assert(std::get<std::string>(func_prop->value) == "Version(1, 0)" && "函数值不匹配");
+    
+    std::cout << "VersionFunc 数据类型: " << static_cast<int>(func_prop->type) << std::endl;
+    
+    // 检查值的类型
+    std::cout << "检查 VersionFunc 值类型..." << std::endl;
+    std::cout << "值索引: " << func_prop->value.index() << std::endl;
+    
+    if (std::holds_alternative<std::string>(func_prop->value)) {
+        std::string value = std::get<std::string>(func_prop->value);
+        std::cout << "VersionFunc 值: " << value << std::endl;
+        assert(value == "Version(1, 0)" && "函数值不匹配");
+    } else {
+        std::cerr << "错误：VersionFunc 值不是字符串类型" << std::endl;
+        assert(false && "VersionFunc 值类型错误");
+    }
     
     // 测试集合
     auto set_prop = root->find_property("StringSet");
+    std::cout << "StringSet 属性: " << (set_prop.has_value() ? "找到" : "未找到") << std::endl;
     assert(set_prop.has_value() && "StringSet属性未找到");
     
-    auto set_items = std::get<std::vector<std::string>>(set_prop->value);
-    assert(set_items.size() == 3 && "集合大小不匹配");
-    assert(set_items[0] == "item1" && "集合项1不匹配");
-    assert(set_items[1] == "item2" && "集合项2不匹配");
-    assert(set_items[2] == "item3" && "集合项3不匹配");
+    std::cout << "StringSet 数据类型: " << static_cast<int>(set_prop->type) << std::endl;
+    
+    // 检查值的类型
+    std::cout << "检查 StringSet 值类型..." << std::endl;
+    std::cout << "值索引: " << set_prop->value.index() << std::endl;
+    
+    if (std::holds_alternative<std::vector<std::string>>(set_prop->value)) {
+        auto set_items = std::get<std::vector<std::string>>(set_prop->value);
+        std::cout << "StringSet 大小: " << set_items.size() << std::endl;
+        assert(set_items.size() == 3 && "集合大小不匹配");
+        assert(set_items[0] == "item1" && "集合项1不匹配");
+        assert(set_items[1] == "item2" && "集合项2不匹配");
+        assert(set_items[2] == "item3" && "集合项3不匹配");
+    } else {
+        std::cerr << "错误：StringSet 值不是字符串数组类型" << std::endl;
+        assert(false && "StringSet 值类型错误");
+    }
     
     std::cout << "函数和集合解析测试通过" << std::endl;
 }
