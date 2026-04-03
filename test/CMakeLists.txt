@@ -297,21 +297,21 @@ target_link_libraries(test_aedt_parsing
 )
 
 # 调试解析器
-add_executable(debug_parser
-    debug_parser.cpp
-)
-
-target_include_directories(debug_parser
-    PRIVATE
-        ${CMAKE_SOURCE_DIR}/include
-        ${CMAKE_SOURCE_DIR}/lib/nlohmann
-)
-
-target_link_libraries(debug_parser
-    PRIVATE
-        tool_lib
-        spdlog_lib
-)
+# add_executable(debug_parser
+#     debug_parser.cpp
+# )
+# 
+# target_include_directories(debug_parser
+#     PRIVATE
+#         ${CMAKE_SOURCE_DIR}/include
+#         ${CMAKE_SOURCE_DIR}/lib/nlohmann
+# )
+# 
+# target_link_libraries(debug_parser
+#     PRIVATE
+#         tool_lib
+#         spdlog_lib
+# )
 
 # 启用测试
 enable_testing()
@@ -327,3 +327,21 @@ add_test(NAME test_mpi_basic COMMAND test_mpi_basic)
 add_test(NAME test_maxwell_parser COMMAND test_maxwell_parser)
 add_test(NAME test_material_extraction COMMAND test_material_extraction)
 add_test(NAME test_aedt_parsing COMMAND test_aedt_parsing)
+
+# 图像提取测试
+add_executable(test_image_extraction
+    test_image_extraction.cpp
+)
+
+target_include_directories(test_image_extraction
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_image_extraction
+    PRIVATE
+        tool_lib
+        spdlog_lib
+)
+
+add_test(NAME test_image_extraction COMMAND test_image_extraction)

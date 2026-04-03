@@ -16,6 +16,7 @@ namespace numeric {
 template<typename T>
 JacobiPreconditioner<T>::JacobiPreconditioner(const CsrMatrix<T>& matrix, double epsilon)
     : epsilon_(epsilon) {
+    (void)matrix;
 }
 
 template<typename T>
@@ -38,6 +39,7 @@ void JacobiPreconditioner<T>::print_info() const {
 
 template<typename T>
 ILU0Preconditioner<T>::ILU0Preconditioner(const CsrMatrix<T>& matrix) {
+    (void)matrix;
 }
 
 template<typename T>
@@ -51,6 +53,7 @@ template<typename T>
 void ILU0Preconditioner<T>::forward_substitution(const CsrMatrix<T>& L, 
                                                    const vector_type& r, 
                                                    vector_type& z) const {
+    (void)L;
     int n = (int)r.size();
     z.resize(n);
     
@@ -63,6 +66,7 @@ template<typename T>
 void ILU0Preconditioner<T>::backward_substitution(const CsrMatrix<T>& U, 
                                                     const vector_type& z, 
                                                     vector_type& x) const {
+    (void)U;
     int n = (int)z.size();
     x.resize(n);
     

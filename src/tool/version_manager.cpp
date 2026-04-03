@@ -203,6 +203,7 @@ std::vector<ProjectVersion> VersionManager::get_recent_versions(size_t count) co
 }
 
 bool VersionManager::restore_version(uint64_t version_id, ProjectManager& project) {
+    (void)project;
     auto version = get_version(version_id);
     if (!version.has_value()) {
         return false;
@@ -236,6 +237,7 @@ std::unique_ptr<VersionDiff> VersionManager::compare_versions(uint64_t version1_
 
 std::unique_ptr<VersionDiff> VersionManager::compare_with_current(uint64_t version_id,
                                                                  const ProjectManager& project) const {
+    (void)project;
     return compare_versions(version_id, versions_.back().version_id);
 }
 
@@ -295,6 +297,7 @@ bool VersionManager::export_version(uint64_t version_id, const std::string& file
 }
 
 bool VersionManager::import_version(const std::string& file_path, ProjectManager& project) {
+    (void)project;
     if (!file_utils::exists(file_path)) {
         return false;
     }
@@ -319,6 +322,7 @@ std::string VersionManager::generate_version_path(uint64_t version_id) const {
 }
 
 bool VersionManager::save_version_metadata(const ProjectVersion& version) {
+    (void)version;
     std::string meta_path = file_utils::combinePath(storage_directory_, "versions.xml");
     
     std::ofstream file(meta_path);

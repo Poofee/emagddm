@@ -304,13 +304,13 @@ pugi::xml_document* XmlDocument::getInternalDocument() const {
 XmlDocument XmlFactory::createDocument() {
     XmlDocument doc;
     doc.createNew();
-    return std::move(doc);
+    return doc;
 }
 
 XmlDocument XmlFactory::createDocumentFromFile(const std::string& filename) {
     XmlDocument doc;
     if (doc.loadFromFile(filename)) {
-        return std::move(doc);
+        return doc;
     }
     return XmlDocument();
 }
@@ -318,7 +318,7 @@ XmlDocument XmlFactory::createDocumentFromFile(const std::string& filename) {
 XmlDocument XmlFactory::createDocumentFromString(const std::string& xml_string) {
     XmlDocument doc;
     if (doc.loadFromString(xml_string)) {
-        return std::move(doc);
+        return doc;
     }
     return XmlDocument();
 }

@@ -239,6 +239,22 @@ public:
      * @brief 打印解析树结构（用于调试）
      */
     void print_tree(std::ostream& os = std::cout, int indent = 0) const;
+    
+    /**
+     * @brief 提取Base64图像数据
+     * @param property_name 属性名称（默认为"Image64"）
+     * @return Base64编码的图像数据
+     */
+    std::string extractBase64Image(const std::string& property_name = "Image64") const;
+    
+    /**
+     * @brief 从指定块中提取Base64图像数据
+     * @param block_name 块名称
+     * @param property_name 属性名称
+     * @return Base64编码的图像数据
+     */
+    std::string extractBase64ImageFromBlock(const std::string& block_name, 
+                                             const std::string& property_name = "Image64") const;
 };
 
 } // namespace maxwell_parser

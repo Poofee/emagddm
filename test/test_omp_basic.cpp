@@ -125,6 +125,7 @@ void test_omp_thread_local() {
     
     // 注意：线程局部变量在并行区域外不可访问
     // 这里只是验证编译通过和执行无异常
+    (void)thread_local_counter;
     
     std::cout << "线程局部存储测试通过" << std::endl;
 }

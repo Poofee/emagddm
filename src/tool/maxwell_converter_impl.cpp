@@ -120,21 +120,21 @@ std::shared_ptr<Excitation> MaxwellConverterImpl::convertExcitationDirect(
 
 std::shared_ptr<Geometry> MaxwellConverterImpl::convertGeometryDirect(
     const std::shared_ptr<fe_em::tool::maxwell_parser::BlockNode>& geometry_block) {
-    
+    (void)geometry_block;
     FEEM_WARN("MaxwellConverterImpl: 几何数据转换功能待实现");
     return nullptr;
 }
 
 std::shared_ptr<SolutionSetup> MaxwellConverterImpl::convertSolutionSetupDirect(
     const std::shared_ptr<fe_em::tool::maxwell_parser::BlockNode>& solution_block) {
-    
+    (void)solution_block;
     FEEM_WARN("MaxwellConverterImpl: 求解设置转换功能待实现");
     return nullptr;
 }
 
 std::shared_ptr<ProjectData> MaxwellConverterImpl::convertProjectDataDirect(
     const std::shared_ptr<fe_em::tool::maxwell_parser::BlockNode>& project_block) {
-    
+    (void)project_block;
     FEEM_WARN("MaxwellConverterImpl: 项目数据转换功能待实现");
     return nullptr;
 }
@@ -809,9 +809,8 @@ void MaxwellConverterImpl::convertExcitationMotionParameters(
 void MaxwellConverterImpl::convertExcitationMaxwellSpecificProperties(
     Excitation& excitation,
     const std::shared_ptr<fe_em::tool::maxwell_parser::BlockNode>& excitation_block) {
-    
-    // 这里可以添加Maxwell专属激励参数的转换逻辑
-    // 例如特定的参数映射或特殊处理
+    (void)excitation;
+    (void)excitation_block;
 }
 
 // ============================================================================

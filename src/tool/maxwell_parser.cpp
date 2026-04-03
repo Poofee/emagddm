@@ -105,7 +105,7 @@ void MaxwellParser::preprocess_content() {
 }
 
 void MaxwellParser::skip_whitespace_and_comments() {
-    while (current_line_ < lines_.size()) {
+    while (current_line_ < static_cast<int>(lines_.size())) {
         std::string line = lines_[current_line_];
         
         // 跳过空白行
@@ -127,7 +127,7 @@ void MaxwellParser::skip_whitespace_and_comments() {
 std::shared_ptr<BlockNode> MaxwellParser::parse_block() {
     skip_whitespace_and_comments();
     
-    if (current_line_ >= lines_.size()) {
+    if (current_line_ >= static_cast<int>(lines_.size())) {
         return nullptr;
     }
     
@@ -143,11 +143,10 @@ std::shared_ptr<BlockNode> MaxwellParser::parse_block() {
     auto block = std::make_shared<BlockNode>(block_name, current_line_ + 1);
     current_line_++;
     
-    // 解析块内容
-    while (current_line_ < lines_.size()) {
+    while (current_line_ < static_cast<int>(lines_.size())) {
         skip_whitespace_and_comments();
         
-        if (current_line_ >= lines_.size()) {
+        if (current_line_ >= static_cast<int>(lines_.size())) {
             throw ParseError("块未正确结束: " + block_name, block->start_line);
         }
         
@@ -192,7 +191,7 @@ std::shared_ptr<BlockNode> MaxwellParser::parse_block() {
 }
 
 Property MaxwellParser::parse_property() {
-    if (current_line_ >= lines_.size()) {
+    if (current_line_ >= static_cast<int>(lines_.size())) {
         throw ParseError("期望属性定义", current_line_ + 1);
     }
     

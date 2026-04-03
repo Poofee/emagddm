@@ -69,6 +69,8 @@ void MPIComm::init(int* argc, char*** argv) {
     
 #else
     // 单进程模式：设置默认值
+    (void)argc;
+    (void)argv;
     initialized_ = true;
     rank_ = 0;
     size_ = 1;

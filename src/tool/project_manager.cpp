@@ -444,12 +444,14 @@ bool ProjectManager::importMaxwellFile(const std::string& file_path) {
 }
 
 bool ProjectManager::importAEDTFile(const std::string& file_path) {
+    (void)file_path;
     FEEM_INFO("AEDT file import not fully implemented yet");
     last_error_ = "AEDT import requires additional implementation";
     return false;
 }
 
 bool ProjectManager::importEMFFile(const std::string& file_path) {
+    (void)file_path;
     FEEM_INFO("EMF file import not fully implemented yet");
     last_error_ = "EMF import requires additional implementation";
     return false;

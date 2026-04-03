@@ -419,7 +419,7 @@ void MPIComm::scatter(const T* send_data, const int* send_counts,
                                  root_rank, MPI_COMM_WORLD);
     check_error(error_code, "MPI_Scatterv");
 #else
-    // 单进程模式：直接复制数据
+    (void)send_counts;
     if (root_rank == 0) {
         std::copy(send_data, send_data + recv_count, recv_data);
     }

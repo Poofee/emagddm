@@ -23,7 +23,9 @@ void SparseMatrix::setSize(int rows, int cols) {
 }
 
 void SparseMatrix::insert(int row, int col, double value) {
-    // TODO: 实现稀疏矩阵元素插入逻辑
+    (void)row;
+    (void)col;
+    (void)value;
 }
 
 int SparseMatrix::rows() const {

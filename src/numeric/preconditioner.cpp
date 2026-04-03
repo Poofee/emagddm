@@ -10,10 +10,4 @@
 
 namespace numeric {
 
-// 模板类的显式实例化
-template class JacobiPreconditioner<double>;
-template class JacobiPreconditioner<std::complex<double>>;
-template class ILU0Preconditioner<double>;
-template class ILU0Preconditioner<std::complex<double>>;
-
 } // namespace numeric

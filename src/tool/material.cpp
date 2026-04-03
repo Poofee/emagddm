@@ -202,7 +202,7 @@ bool Material::fromBinary(const std::vector<uint8_t>& data, size_t& offset) {
     try {
         // 读取版本信息
         if (offset + sizeof(uint32_t) > data.size()) return false;
-        uint32_t version = *reinterpret_cast<const uint32_t*>(&data[offset]);
+        (void)*reinterpret_cast<const uint32_t*>(&data[offset]);
         offset += sizeof(uint32_t);
         
         // 读取JSON数据
