@@ -64,12 +64,11 @@ public:
      * @brief 获取项目管理器引用（用于访问加载的数据）
      * @return ProjectManager& 项目管理器引用
      */
-    tool::ProjectManager& getProjectManager() { return project_manager_; }
+    tool::ProjectManager& getProjectManager() { return tool::ProjectManager::getInstance(); }
 
 private:
     std::string input_file_;
     bool initialized_;
-    tool::ProjectManager& project_manager_;       ///< 统一数据容器（引用单例，内部持有加载器）
 };
 
 } // namespace app

@@ -12,7 +12,7 @@
 
 namespace app {
 
-SolverApp::SolverApp() : initialized_(false), project_manager_(tool::ProjectManager::getInstance()) {
+SolverApp::SolverApp() : initialized_(false) {
 }
 
 SolverApp::~SolverApp() {
@@ -27,26 +27,27 @@ bool SolverApp::initialize(const std::string& input_file) {
 
     input_file_ = input_file;
 
+    auto& pm = tool::ProjectManager::getInstance();
+
     FEEM_INFO("========================================");
     FEEM_INFO("正在打开项目文件: {}", input_file);
     FEEM_INFO("========================================");
 
-    if (!project_manager_.openProject(input_file)) {
-        FEEM_ERROR("项目打开失败: {}", project_manager_.getLastError());
+    if (!pm.openProject(input_file)) {
+        FEEM_ERROR("项目打开失败: {}", pm.getLastError());
         return false;
     }
 
     initialized_ = true;
 
-    // 输出加载结果摘要
     FEEM_INFO("");
     FEEM_INFO("========================================");
     FEEM_INFO("数据加载完成摘要:");
-    FEEM_INFO("  项目名称: {}", project_manager_.getProjectName());
-    FEEM_INFO("  材料数量: {}", project_manager_.getAllMaterials().size());
-    FEEM_INFO("  边界条件数量: {}", project_manager_.getAllBoundaries().size());
-    FEEM_INFO("  激励源数量: {}", project_manager_.getAllExcitations().size());
-    FEEM_INFO("  求解设置数量: {}", project_manager_.getAllSolutionSetups().size());
+    FEEM_INFO("  项目名称: {}", pm.getProjectName());
+    FEEM_INFO("  材料数量: {}", pm.getAllMaterials().size());
+    FEEM_INFO("  边界条件数量: {}", pm.getAllBoundaries().size());
+    FEEM_INFO("  激励源数量: {}", pm.getAllExcitations().size());
+    FEEM_INFO("  求解设置数量: {}", pm.getAllSolutionSetups().size());
     FEEM_INFO("========================================");
 
     return true;
@@ -90,7 +91,7 @@ bool SolverApp::run() {
 void SolverApp::cleanup() {
     if (initialized_) {
         FEEM_INFO("清理求解器应用资源");
-        project_manager_.closeProject();
+        tool::ProjectManager::getInstance().closeProject();
         initialized_ = false;
     }
 }
