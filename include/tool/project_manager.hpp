@@ -169,7 +169,4 @@ private:
     static constexpr const char* CURRENT_VERSION = "1.0";
 };
 
-bool createProjectFromTemplate(const std::string& template_path, const std::string& output_path,
-                               const std::unordered_map<std::string, std::string>& replacements);
-
 } // namespace tool

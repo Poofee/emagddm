@@ -391,34 +391,5 @@ TemperatureSettingsPtr ProjectManager::getTemperatureSettings() const {
     return nullptr;
 }
 
-bool createProjectFromTemplate(const std::string& template_path, const std::string& output_path,
-                              const std::unordered_map<std::string, std::string>& replacements) {
-    if (!file_utils::exists(template_path)) {
-        FEEM_ERROR("Template file not found: {}", template_path);
-        return false;
-    }
-
-    std::string content;
-    if (!file_utils::readText(template_path, content)) {
-        FEEM_ERROR("Failed to read template file: {}", template_path);
-        return false;
-    }
-
-    for (const auto& pair : replacements) {
-        size_t pos = 0;
-        while ((pos = content.find(pair.first, pos)) != std::string::npos) {
-            content.replace(pos, pair.first.length(), pair.second);
-            pos += pair.second.length();
-        }
-    }
-
-    if (!file_utils::writeText(output_path, content)) {
-        FEEM_ERROR("Failed to write project file: {}", output_path);
-        return false;
-    }
-
-    FEEM_INFO("Project created from template: {}", output_path);
-    return true;
-}
 
 } // namespace tool
