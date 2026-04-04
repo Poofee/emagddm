@@ -63,6 +63,42 @@ private:
      */
     void extractPreviewImage(const std::string& file_path);
 
+    /**
+     * @brief 将JSON绕组数据转换为Winding对象并添加到项目管理器
+     */
+    void convertAndAddWindings(ProjectManager& manager,
+                               const std::vector<nlohmann::json>& windings_json);
+
+    /**
+     * @brief 将JSON运动设置数据转换为MotionSetup对象并添加到项目管理器
+     */
+    void convertAndAddMotionSetups(ProjectManager& manager,
+                                   const std::vector<nlohmann::json>& motions_json);
+
+    /**
+     * @brief 将JSON网格操作数据转换为MeshOperation对象并添加到项目管理器
+     */
+    void convertAndAddMeshOperations(ProjectManager& manager,
+                                     const std::vector<nlohmann::json>& ops_json);
+
+    /**
+     * @brief 将JSON设计变量数据转换为DesignVariable对象并添加到项目管理器
+     */
+    void convertAndAddDesignVariables(ProjectManager& manager,
+                                      const std::vector<nlohmann::json>& vars_json);
+
+    /**
+     * @brief 将JSON输出变量数据转换为OutputVariable对象并添加到项目管理器
+     */
+    void convertAndAddOutputVariables(ProjectManager& manager,
+                                      const std::vector<nlohmann::json>& vars_json);
+
+    /**
+     * @brief 将JSON温度设置数据转换为TemperatureSettings对象并设置到项目管理器
+     */
+    void convertAndAddTemperatureSettings(ProjectManager& manager,
+                                          const nlohmann::json& temp_json);
+
     std::string file_path_;
     std::string last_error_;
     MaxwellParserImpl parser_;

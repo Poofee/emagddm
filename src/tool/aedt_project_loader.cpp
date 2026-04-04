@@ -105,12 +105,49 @@ bool AedtProjectLoader::load(ProjectManager& manager) {
     convertAndAddExcitations(manager, excitations_json);
 
     FEEM_INFO("");
-    FEEM_INFO("[5/6] 解析求解设置...");
+    FEEM_INFO("[5/13] 解析求解设置...");
     auto setup_json = parser_.parseSolutionSetup();
     convertAndAddSolutionSetup(manager, setup_json);
 
     FEEM_INFO("");
-    FEEM_INFO("[6/6] 提取预览图像...");
+    FEEM_INFO("[6/13] 解析绕组组...");
+    auto windings_json = parser_.extractWindings();
+    convertAndAddWindings(manager, windings_json);
+
+    FEEM_INFO("");
+    FEEM_INFO("[7/13] 解析运动设置...");
+    auto motions_json = parser_.extractMotionSetups();
+    convertAndAddMotionSetups(manager, motions_json);
+
+    FEEM_INFO("");
+    FEEM_INFO("[8/13] 解析全局网格设置...");
+    auto mesh_settings_json = parser_.extractGlobalMeshSettings();
+
+    FEEM_INFO("");
+    FEEM_INFO("[9/13] 解析网格操作...");
+    auto mesh_ops_json = parser_.extractMeshOperations();
+    convertAndAddMeshOperations(manager, mesh_ops_json);
+
+    FEEM_INFO("");
+    FEEM_INFO("[10/13] 解析设计变量和输出变量...");
+    auto design_vars_json = parser_.extractDesignVariables();
+    auto nonindexed_vars_json = parser_.extractNonIndexedVariables();
+    convertAndAddDesignVariables(manager, design_vars_json);
+    convertAndAddDesignVariables(manager, nonindexed_vars_json);
+    auto output_vars_json = parser_.extractOutputVariables();
+    convertAndAddOutputVariables(manager, output_vars_json);
+
+    FEEM_INFO("");
+    FEEM_INFO("[11/13] 解析温度设置...");
+    auto temp_settings_json = parser_.extractTemperatureSettings();
+    convertAndAddTemperatureSettings(manager, temp_settings_json);
+
+    FEEM_INFO("");
+    FEEM_INFO("[12/13] 解析全局边界数据...");
+    auto global_bound_data = parser_.extractGlobalBoundData();
+
+    FEEM_INFO("");
+    FEEM_INFO("[13/13] 提取预览图像...");
     extractPreviewImage(file_path_);
 
     FEEM_INFO("");
@@ -176,6 +213,86 @@ void AedtProjectLoader::convertAndAddMaterials(ProjectManager& manager,
             }
         }
 
+        // 元信息（材料库来源等）
+        if (mat_json.contains("library")) {
+            material->setLibraryInfo(
+                mat_json.value("library", ""),
+                mat_json.value("lib_location", ""),
+                mat_json.value("mod_since_lib", false));
+        }
+
+        // 扩展物理属性
+        if (mat_json.contains("permittivity"))
+            material->setPermittivity(safeGetDouble(mat_json["permittivity"], 1.0));
+        if (mat_json.contains("youngs_modulus"))
+            material->setYoungsModulus(safeGetDouble(mat_json["youngs_modulus"], 0.0));
+        if (mat_json.contains("poisons_ratio"))
+            material->setPoisonsRatio(safeGetDouble(mat_json["poisons_ratio"], 0.0));
+        if (mat_json.contains("thermal_expansion_coefficient"))
+            material->setThermalExpansionCoefficient(
+                safeGetDouble(mat_json["thermal_expansion_coefficient"], 0.0));
+
+        // B-H曲线元信息
+        if (mat_json.contains("bh_curve_data_type"))
+            material->setBHCurveDataType(mat_json["bh_curve_data_type"].get<std::string>());
+        if (mat_json.contains("is_temperature_dependent"))
+            material->setIsTemperatureDependent(mat_json["is_temperature_dependent"].get<bool>());
+
+        // 铁损/堆叠类型
+        if (mat_json.contains("core_loss_type_choice"))
+            material->setCoreLossTypeChoice(mat_json["core_loss_type_choice"].get<std::string>());
+        if (mat_json.contains("stacking_type_str"))
+            material->setStackingTypeStr(mat_json["stacking_type_str"].get<std::string>());
+
+        // 温度相关B-H曲线
+        if (mat_json.contains("temperature_bh_curves") && mat_json["temperature_bh_curves"].is_object()) {
+            std::map<double, std::vector<BHDataPoint>> temp_curves;
+            for (auto& [temp_key, points_arr] : mat_json["temperature_bh_curves"].items()) {
+                double temp = std::stod(temp_key);
+                std::vector<BHDataPoint> bh_points;
+                for (const auto& pt : points_arr) {
+                    BHDataPoint dp;
+                    dp.h = pt[0].get<double>();
+                    dp.b = pt[1].get<double>();
+                    bh_points.push_back(dp);
+                }
+                temp_curves[temp] = bh_points;
+            }
+            material->setTemperatureBHCurves(temp_curves);
+        }
+
+        // 多频率铁损曲线
+        if (mat_json.contains("core_loss_freq_curves") && mat_json["core_loss_freq_curves"].is_object()) {
+            std::map<double, std::vector<std::pair<double, double>>> freq_curves;
+            for (auto& [freq_key, bp_arr] : mat_json["core_loss_freq_curves"].items()) {
+                double freq = std::stod(freq_key);
+                std::vector<std::pair<double, double>> bp_points;
+                for (const auto& pt : bp_arr) {
+                    bp_points.push_back({pt[0].get<double>(), pt[1].get<double>()});
+                }
+                freq_curves[freq] = bp_points;
+            }
+            material->setCoreLossFreqCurves(freq_curves);
+        }
+
+        // 热修正器
+        if (mat_json.contains("thermal_modifiers") && mat_json["thermal_modifiers"].is_array()) {
+            for (const auto& tm : mat_json["thermal_modifiers"]) {
+                Material::ThermalModifier mod;
+                mod.property_name = tm.value("property_name", "");
+                mod.index = tm.value("index", 0);
+                mod.formula_string = tm.value("formula_string", "");
+                material->addThermalModifier(mod);
+            }
+        }
+
+        // 外观颜色数据
+        if (mat_json.contains("appearance_data") && mat_json["appearance_data"].is_object()) {
+            auto& app = mat_json["appearance_data"];
+            material->setAppearance(app.value("red", 200), app.value("green", 200),
+                                    app.value("blue", 200), app.value("transparency", 0.0));
+        }
+
         manager.addMaterial(material);
         FEEM_INFO("  已加载材料: {} (μr={})", name, material->getRelativePermeability());
     }
@@ -229,6 +346,16 @@ void AedtProjectLoader::convertAndAddBoundaries(ProjectManager& manager,
                 boundary->setVoltage(std::stod(value_str));
             }
         }
+
+        // 边界扩展字段
+        if (bnd_json.contains("parent_bnd_id"))
+            boundary->setParentBndID(bnd_json["parent_bnd_id"].get<int>());
+        if (bnd_json.contains("is_component"))
+            boundary->setIsComponent(bnd_json["is_component"].get<bool>());
+        if (bnd_json.contains("coordinate_system"))
+            boundary->setCoordinateSystem(bnd_json["coordinate_system"].get<int>());
+        if (bnd_json.contains("conductor_number_str"))
+            boundary->setConductorNumberStr(bnd_json["conductor_number_str"].get<std::string>());
 
         manager.addBoundary(boundary);
         FEEM_INFO("  已加载边界条件: {} ({})", name, bound_type_str);
@@ -311,10 +438,200 @@ void AedtProjectLoader::convertAndAddSolutionSetup(ProjectManager& manager,
         setup->setPercentError(error_val);
     }
 
+    // 新增瞬态求解字段
+    setup->setEnabled(setup_json.value("enabled", true));
+    setup->setTimeIntegrationMethod(setup_json.value("time_integration_method", 0));
+    setup->setSmoothBHCurve(setup_json.value("smooth_bh_curve", false));
+    setup->setErrorOutput(setup_json.value("output_error", false));
+    setup->setFastReachSteadyState(setup_json.value("fast_reach_steady_state", true));
+    setup->setAutoDetectSteadyState(setup_json.value("auto_detect_steady_state", true));
+    setup->setStopCriterion(safeGetDouble(setup_json["stop_criterion"], 0.005));
+    setup->setSaveFieldsType(setup_json.value("save_fields_type", ""));
+    setup->setNSteps(setup_json.value("n_steps", ""));
+    setup->setStepsFrom(setup_json.value("steps_from", ""));
+    setup->setStepsTo(setup_json.value("steps_to", ""));
+    setup->setUseAdaptiveTimeStep(setup_json.value("use_adaptive_time_step", false));
+    setup->setInitialTimeStep(setup_json.value("initial_time_step", ""));
+    setup->setMinTimeStep(setup_json.value("min_time_step", ""));
+    setup->setMaxTimeStep(setup_json.value("max_time_step", ""));
+    setup->setTimeStepErrTolerance(safeGetDouble(setup_json["time_step_err_tolerance"], 0.0001));
+
     manager.addSolutionSetup(setup);
 
     FEEM_INFO("  求解器名称: {}", name);
     FEEM_INFO("  求解类型: {}", setup_type_str);
+}
+
+void AedtProjectLoader::convertAndAddWindings(ProjectManager& manager,
+                                               const std::vector<nlohmann::json>& windings_json) {
+    for (const auto& w_json : windings_json) {
+        std::string name = w_json.value("name", "Unknown");
+        auto winding = std::make_shared<Winding>(name);
+
+        // 设置激励类型
+        std::string type_str = w_json.value("type", "Current");
+        if (type_str == "Voltage") {
+            winding->setExcitationType(WindingExcitationType::VOLTAGE);
+        } else {
+            winding->setExcitationType(WindingExcitationType::CURRENT);
+        }
+
+        // 设置其他字段
+        winding->setIsSolid(w_json.value("is_solid", false));
+        winding->setCurrentExpression(w_json.value("current", ""));
+        winding->setVoltageExpression(w_json.value("voltage", ""));
+        winding->setResistance(w_json.value("resistance", ""));
+        winding->setInductance(w_json.value("inductance", ""));
+        winding->setParallelBranchesNum(w_json.value("parallel_branches_num", ""));
+
+        manager.addWinding(winding);
+        FEEM_INFO("  已加载绕组: {} ({})", name, type_str);
+    }
+    FEEM_INFO("  共加载 {} 个绕组组", windings_json.size());
+}
+
+void AedtProjectLoader::convertAndAddMotionSetups(ProjectManager& manager,
+                                                    const std::vector<nlohmann::json>& motions_json) {
+    for (const auto& m_json : motions_json) {
+        std::string name = m_json.value("name", "MotionSetup1");
+        auto motion = std::make_shared<MotionSetup>(name);
+
+        // 运动类型映射
+        std::string motion_type = m_json.value("motion_type", "Band");
+        if (motion_type == "Band") motion->setMotionType(MotionSetupType::BAND);
+        else if (motion_type == "Rotation") motion->setMotionType(MotionSetupType::ROTATION);
+        else if (motion_type == "Translation") motion->setMotionType(MotionSetupType::TRANSLATION);
+
+        std::string move_type = m_json.value("move_type", "Rotate");
+        if (move_type == "Linear") motion->setMoveType(MoveType::LINEAR);
+        else motion->setMoveType(MoveType::ROTATE);
+
+        // 轴映射
+        std::string axis = m_json.value("axis", "Z");
+        if (axis == "X") motion->setAxis(MotionAxis::X);
+        else if (axis == "Y") motion->setAxis(MotionAxis::Y);
+        else motion->setAxis(MotionAxis::Z);
+
+        motion->setInitialPosition(m_json.value("initial_position", ""));
+        motion->setAngularVelocity(m_json.value("angular_velocity", ""));
+        motion->setBandNameRef(m_json.value("band_name_ref", -1));
+
+        // 关联对象
+        if (m_json.contains("objects") && m_json["objects"].is_array()) {
+            for (const auto& obj : m_json["objects"]) {
+                motion->addObject(obj.get<int>());
+            }
+        }
+        // Moving子项对象
+        if (m_json.contains("moving_objects") && m_json["moving_objects"].is_array()) {
+            for (const auto& obj : m_json["moving_objects"]) {
+                motion->addMovingObject(obj.get<int>());
+            }
+        }
+
+        manager.addMotionSetup(motion);
+        FEEM_INFO("  已加载运动设置: {} ({}, {})", name, motion_type, move_type);
+    }
+}
+
+void AedtProjectLoader::convertAndAddMeshOperations(ProjectManager& manager,
+                                                      const std::vector<nlohmann::json>& ops_json) {
+    for (const auto& op_json : ops_json) {
+        std::string name = op_json.value("name", "Unknown");
+        auto op = std::make_shared<MeshOperation>(name);
+
+        // 类型映射
+        std::string type_str = op_json.value("type", "LengthBased");
+        if (type_str == "SurfApproxBased" || type_str == "_skin_depth_based") {
+            op->setType(MeshOperationType::SURF_APPROX_BASED);
+        } else if (type_str == "CylindricalGap") {
+            op->setType(MeshOperationType::CYLINDRICAL_GAP);
+        } else {
+            op->setType(MeshOperationType::LENGTH_BASED);
+        }
+
+        op->setEnabled(op_json.value("enabled", true));
+
+        // 对象列表
+        if (op_json.contains("objects") && op_json["objects"].is_array()) {
+            for (const auto& obj : op_json["objects"]) {
+                op->addObject(obj.get<int>());
+            }
+        }
+
+        // LengthBased特有字段
+        if (op_json.contains("max_length")) op->setMaxLength(op_json["max_length"].get<std::string>());
+        if (op_json.contains("num_max_elem")) op->setNumMaxElem(op_json["num_max_elem"].get<std::string>());
+
+        // SurfApproxBased特有字段
+        if (op_json.contains("surf_dev")) op->setSurfDev(op_json["surf_dev"].get<std::string>());
+        if (op_json.contains("normal_dev")) op->setNormalDev(op_json["normal_dev"].get<std::string>());
+
+        // CylindricalGap特有字段
+        if (op_json.contains("band_mapping_angle")) op->setBandMappingAngle(op_json["band_mapping_angle"].get<std::string>());
+
+        manager.addMeshOperation(op);
+        FEEM_INFO("  已加载网格操作: {} ({})", name, type_str);
+    }
+    FEEM_INFO("  共加载 {} 个网格操作", ops_json.size());
+}
+
+void AedtProjectLoader::convertAndAddDesignVariables(ProjectManager& manager,
+                                                       const std::vector<nlohmann::json>& vars_json) {
+    for (const auto& v_json : vars_json) {
+        std::string name = v_json.value("name", "Unknown");
+        std::string value = v_json.value("value", "");
+        std::string unit = v_json.value("unit", "");
+
+        auto var = std::make_shared<DesignVariable>(name, value, unit);
+        var->setIndexed(v_json.value("is_indexed", false));
+        if (v_json.contains("expression")) {
+            var->setExpression(v_json["expression"].get<std::string>());
+        }
+
+        manager.addDesignVariable(var);
+        FEEM_DEBUG("  已加载设计变量: {} = {}", name, value);
+    }
+    FEEM_INFO("  共加载 {} 个设计变量", vars_json.size());
+}
+
+void AedtProjectLoader::convertAndAddOutputVariables(ProjectManager& manager,
+                                                       const std::vector<nlohmann::json>& vars_json) {
+    for (const auto& v_json : vars_json) {
+        std::string name = v_json.value("name", "Unknown");
+        int id = v_json.value("id", 0);
+        std::string expr = v_json.value("expression", "");
+        std::string result_unit = v_json.value("result_unit", "");
+        std::string display_unit = v_json.value("display_unit", "");
+
+        auto var = std::make_shared<OutputVariable>(name, id, expr, result_unit, display_unit);
+        manager.addOutputVariable(var);
+        FEEM_DEBUG("  已加载输出变量: {} [{}]", name, id);
+    }
+    FEEM_INFO("  共加载 {} 个输出变量", vars_json.size());
+}
+
+void AedtProjectLoader::convertAndAddTemperatureSettings(ProjectManager& manager,
+                                                           const nlohmann::json& temp_json) {
+    if (temp_json.empty()) return;
+
+    auto settings = std::make_shared<TemperatureSettings>();
+    settings->setIncludeTemperatureDependence(temp_json.value("include_temperature_dependence", false));
+    settings->setEnableFeedback(temp_json.value("enable_feedback", false));
+
+    if (temp_json.contains("object_temperatures") && temp_json["object_temperatures"].is_object()) {
+        for (auto& [key, val] : temp_json["object_temperatures"].items()) {
+            try {
+                int obj_id = std::stoi(key);
+                std::string temp_ref = val.get<std::string>();
+                settings->setObjectTemperature(obj_id, temp_ref);
+            } catch (...) {}
+        }
+    }
+
+    manager.setTemperatureSettings(settings);
+    FEEM_INFO("  已加载温度设置 ({}个物体映射)",
+              settings->getObjectTemperatureMap().size());
 }
 
 void AedtProjectLoader::extractPreviewImage(const std::string& file_path) {

@@ -53,6 +53,12 @@ bool ProjectManager::createProject(const std::string& name, const std::string& f
     excitations_.clear();
     mesh_.reset();
     solution_setups_.clear();
+    windings_.clear();
+    motion_setups_.clear();
+    mesh_operations_.clear();
+    design_variables_.clear();
+    output_variables_.clear();
+    temperature_settings_.reset();
     loader_.reset();
 
     notifyListeners(ProjectState::CLOSING, state_);
@@ -149,6 +155,12 @@ bool ProjectManager::closeProject() {
     excitations_.clear();
     mesh_.reset();
     solution_setups_.clear();
+    windings_.clear();
+    motion_setups_.clear();
+    mesh_operations_.clear();
+    design_variables_.clear();
+    output_variables_.clear();
+    temperature_settings_.reset();
 
     project_name_ = "Untitled";
     project_file_path_ = "";
@@ -304,6 +316,79 @@ std::string ProjectManager::getVersionString() {
 
 std::string ProjectManager::getVersion() {
     return CURRENT_VERSION;
+}
+
+// ========== 绕组组管理实现 ==========
+
+void ProjectManager::addWinding(WindingPtr winding) {
+    windings_[winding->getName()] = winding;
+    is_modified_ = true;
+}
+
+bool ProjectManager::hasWinding(const std::string& name) const {
+    return windings_.find(name) != windings_.end();
+}
+
+WindingPtr ProjectManager::getWinding(const std::string& name) const {
+    auto it = windings_.find(name);
+    if (it != windings_.end()) {
+        return it->second;
+    }
+    return nullptr;
+}
+
+// ========== 运动设置管理实现 ==========
+
+void ProjectManager::addMotionSetup(MotionSetupPtr setup) {
+    motion_setups_.push_back(setup);
+    is_modified_ = true;
+}
+
+// ========== 网格操作管理实现 ==========
+
+void ProjectManager::addMeshOperation(MeshOperationPtr operation) {
+    mesh_operations_[operation->getName()] = operation;
+    is_modified_ = true;
+}
+
+bool ProjectManager::hasMeshOperation(const std::string& name) const {
+    return mesh_operations_.find(name) != mesh_operations_.end();
+}
+
+MeshOperationPtr ProjectManager::getMeshOperation(const std::string& name) const {
+    auto it = mesh_operations_.find(name);
+    if (it != mesh_operations_.end()) {
+        return it->second;
+    }
+    return nullptr;
+}
+
+// ========== 设计变量管理实现 ==========
+
+void ProjectManager::addDesignVariable(DesignVariablePtr variable) {
+    design_variables_[variable->getName()] = variable;
+    is_modified_ = true;
+}
+
+// ========== 输出变量管理实现 ==========
+
+void ProjectManager::addOutputVariable(OutputVariablePtr variable) {
+    output_variables_[variable->getName()] = variable;
+    is_modified_ = true;
+}
+
+// ========== 温度设置管理实现 ==========
+
+void ProjectManager::setTemperatureSettings(TemperatureSettingsPtr settings) {
+    temperature_settings_ = settings;
+    is_modified_ = true;
+}
+
+TemperatureSettingsPtr ProjectManager::getTemperatureSettings() const {
+    if (temperature_settings_.has_value()) {
+        return temperature_settings_.value();
+    }
+    return nullptr;
 }
 
 bool createProjectFromTemplate(const std::string& template_path, const std::string& output_path,

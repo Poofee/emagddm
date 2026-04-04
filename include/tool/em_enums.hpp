@@ -307,4 +307,89 @@ ProjectFileType stringToProjectFileType(const std::string& str);
 std::string maxwellVersionToString(MaxwellVersion version);
 MaxwellVersion stringToMaxwellVersion(const std::string& str);
 
+// ==================== 运动相关枚举 ====================
+
+enum class MotionSetupType {
+    BAND,           ///< Band运动（旋转/平移由MoveType决定）
+    ROTATION,       ///< 纯旋转运动
+    TRANSLATION     ///< 纯平移运动
+};
+
+enum class MoveType {
+    ROTATE,         ///< 旋转
+    LINEAR          ///< 平移（直线）
+};
+
+enum class MotionAxis {
+    X,              ///< X轴
+    Y,              ///< Y轴
+    Z               ///< Z轴
+};
+
+// ==================== 网格操作枚举 ====================
+
+enum class MeshOperationType {
+    LENGTH_BASED,       ///< 基于长度的网格
+    SURF_APPROX_BASED,  ///< 基于曲面近似的网格
+    CYLINDRICAL_GAP,    ///< 柱面间隙网格
+    SKIN_DEPTH_BASED,   ///< 基于趋肤深度的网格
+    USER_DEFINED        ///< 用户自定义网格操作
+};
+
+enum class SurfApproxMode {
+    USE_SLIDER,        ///< 使用滑块控制
+    MANUAL_SETTINGS    ///< 手动设置参数
+};
+
+// ==================== 绕组相关枚举 ====================
+
+enum class WindingExcitationType {
+    CURRENT,            ///< 电流激励
+    VOLTAGE             ///< 电压激励
+};
+
+// ==================== 材料扩展枚举 ====================
+
+enum class CoreLossType {
+    ELECTRICAL_STEEL,  ///< 电工钢铁损模型
+    POWER_FERRITE,      ///< 功率铁氧体铁损模型
+    CUSTOM              ///< 自定义铁损模型
+};
+
+enum class StackingType {
+    SOLID,              ///< 实心（无叠片）
+    LAMINATED           ///< 叠片（有叠片因子）
+};
+
+enum class BHCurveDataType {
+    NORMAL,             ///< normal型B-H曲线（常规）
+    INTRINSIC           ///< intrinsic型B-H曲线（内禀）
+};
+
+// ==================== 瞬态求解枚举 ====================
+
+enum class TimeIntegrationMethod {
+    BACKWARD_EULER = 0,    ///< 后向欧拉法
+    TRAPEZOIDAL = 1         ///< 梯形法
+};
+
+enum class SaveFieldsType {
+    EVERY_N_STEPS,      ///< 每N步保存一次
+    EVERY_N_SECONDS,    ///< 每N秒保存一次
+    USER_DEFINED        ///< 用户自定义
+};
+
+// ==================== 新增枚举字符串转换函数声明 ====================
+
+std::string motionSetupTypeToString(MotionSetupType type);
+MotionSetupType stringToMotionSetupType(const std::string& str);
+std::string meshOperationTypeToString(MeshOperationType type);
+MeshOperationType stringToMeshOperationType(const std::string& str);
+std::string coreLossTypeToString(CoreLossType type);
+CoreLossType stringToCoreLossType(const std::string& str);
+std::string stackingTypeToString(StackingType type);
+StackingType stringToStackingType(const std::string& str);
+std::string bhCurveDataTypeToString(BHCurveDataType type);
+BHCurveDataType stringToBHCurveDataType(const std::string& str);
+
 } // namespace tool

@@ -73,6 +73,40 @@ public:
     void setSolutionType(SimulationType type) { solution_type_ = type; is_modified_ = true; }
     SimulationType getSolutionType() const { return solution_type_; }
 
+    // ========== 绕组组管理 ==========
+    void addWinding(WindingPtr winding);
+    const std::unordered_map<std::string, WindingPtr>& getWindings() const { return windings_; }
+    size_t getWindingCount() const { return windings_.size(); }
+    bool hasWinding(const std::string& name) const;
+    WindingPtr getWinding(const std::string& name) const;
+
+    // ========== 运动设置管理 ==========
+    void addMotionSetup(MotionSetupPtr setup);
+    const std::vector<MotionSetupPtr>& getMotionSetups() const { return motion_setups_; }
+    size_t getMotionSetupCount() const { return motion_setups_.size(); }
+
+    // ========== 网格操作管理 ==========
+    void addMeshOperation(MeshOperationPtr operation);
+    const std::unordered_map<std::string, MeshOperationPtr>& getMeshOperations() const { return mesh_operations_; }
+    size_t getMeshOperationCount() const { return mesh_operations_.size(); }
+    bool hasMeshOperation(const std::string& name) const;
+    MeshOperationPtr getMeshOperation(const std::string& name) const;
+
+    // ========== 设计变量管理 ==========
+    void addDesignVariable(DesignVariablePtr variable);
+    const std::unordered_map<std::string, DesignVariablePtr>& getDesignVariables() const { return design_variables_; }
+    size_t getDesignVariableCount() const { return design_variables_.size(); }
+
+    // ========== 输出变量管理 ==========
+    void addOutputVariable(OutputVariablePtr variable);
+    const std::unordered_map<std::string, OutputVariablePtr>& getOutputVariables() const { return output_variables_; }
+    size_t getOutputVariableCount() const { return output_variables_.size(); }
+
+    // ========== 温度设置管理 ==========
+    void setTemperatureSettings(TemperatureSettingsPtr settings);
+    TemperatureSettingsPtr getTemperatureSettings() const;
+    bool hasTemperatureSettings() const { return temperature_settings_.has_value(); }
+
     void registerProjectListener(std::function<void(ProjectState, ProjectState)> listener);
     void unregisterProjectListener(std::function<void(ProjectState, ProjectState)> listener);
 
@@ -109,6 +143,24 @@ private:
     std::unordered_map<std::string, ExcitationPtr> excitations_;
     std::optional<MeshPtr> mesh_;
     std::unordered_map<std::string, SolutionSetupPtr> solution_setups_;
+
+    // 绕组组集合 (Winding Group)
+    std::unordered_map<std::string, WindingPtr> windings_;
+
+    // 运动设置列表 (通常只有1个)
+    std::vector<MotionSetupPtr> motion_setups_;
+
+    // 网格操作集合
+    std::unordered_map<std::string, MeshOperationPtr> mesh_operations_;
+
+    // 设计变量集合
+    std::unordered_map<std::string, DesignVariablePtr> design_variables_;
+
+    // 输出变量集合
+    std::unordered_map<std::string, OutputVariablePtr> output_variables_;
+
+    // 温度设置 (可选)
+    std::optional<TemperatureSettingsPtr> temperature_settings_;
 
     std::vector<std::function<void(ProjectState, ProjectState)>> listeners_;
     std::string last_error_;
