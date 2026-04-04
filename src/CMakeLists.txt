@@ -63,11 +63,15 @@ target_include_directories(numeric_lib
     PRIVATE
         ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_SOURCE_DIR}/include/numeric
+        ${CMAKE_SOURCE_DIR}/lib/eigen
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
 )
 
 target_link_libraries(numeric_lib
     PRIVATE
         include_lib
+        spdlog_lib
+        tool_lib
 )
 
 if(USE_MPI)

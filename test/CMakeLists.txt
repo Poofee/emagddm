@@ -305,3 +305,26 @@ target_link_libraries(test_image_extraction
 )
 
 add_test(NAME test_image_extraction COMMAND test_image_extraction)
+
+# 形函数模块测试
+add_executable(test_shape_function
+    test_shape_function.cpp
+)
+
+target_include_directories(test_shape_function
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/numeric
+        ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/lib/eigen
+)
+
+target_link_libraries(test_shape_function
+    PRIVATE
+        numeric_lib
+        spdlog_lib
+        GTest::gtest
+        GTest::gtest_main
+)
+
+add_test(NAME test_shape_function COMMAND test_shape_function)
