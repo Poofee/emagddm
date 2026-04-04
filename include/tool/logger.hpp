@@ -11,8 +11,7 @@
 #pragma once
 
 #include "log_interface.hpp"
-#include "spdlog/spdlog.h"
-#include "spdlog/fmt/ostr.h"
+#include "string_format.hpp"
 
 namespace tool {
 
@@ -103,8 +102,7 @@ public:
     template<typename... Args>
     void traceFmt(const std::string& fmt_str, Args&&... args) {
         if (logger_impl_ && initialized_) {
-            auto msg = spdlog::fmt_lib::format(fmt_str, std::forward<Args>(args)...);
-            logger_impl_->trace(msg);
+            logger_impl_->trace(formatString(fmt_str, std::forward<Args>(args)...));
         }
     }
 
@@ -117,8 +115,7 @@ public:
     template<typename... Args>
     void debugFmt(const std::string& fmt_str, Args&&... args) {
         if (logger_impl_ && initialized_) {
-            auto msg = spdlog::fmt_lib::format(fmt_str, std::forward<Args>(args)...);
-            logger_impl_->debug(msg);
+            logger_impl_->debug(formatString(fmt_str, std::forward<Args>(args)...));
         }
     }
 
@@ -131,8 +128,7 @@ public:
     template<typename... Args>
     void infoFmt(const std::string& fmt_str, Args&&... args) {
         if (logger_impl_ && initialized_) {
-            auto msg = spdlog::fmt_lib::format(fmt_str, std::forward<Args>(args)...);
-            logger_impl_->info(msg);
+            logger_impl_->info(formatString(fmt_str, std::forward<Args>(args)...));
         }
     }
 
@@ -145,8 +141,7 @@ public:
     template<typename... Args>
     void warnFmt(const std::string& fmt_str, Args&&... args) {
         if (logger_impl_ && initialized_) {
-            auto msg = spdlog::fmt_lib::format(fmt_str, std::forward<Args>(args)...);
-            logger_impl_->warn(msg);
+            logger_impl_->warn(formatString(fmt_str, std::forward<Args>(args)...));
         }
     }
 
@@ -159,8 +154,7 @@ public:
     template<typename... Args>
     void errFmt(const std::string& fmt_str, Args&&... args) {
         if (logger_impl_ && initialized_) {
-            auto msg = spdlog::fmt_lib::format(fmt_str, std::forward<Args>(args)...);
-            logger_impl_->err(msg);
+            logger_impl_->err(formatString(fmt_str, std::forward<Args>(args)...));
         }
     }
 
@@ -173,8 +167,7 @@ public:
     template<typename... Args>
     void criticalFmt(const std::string& fmt_str, Args&&... args) {
         if (logger_impl_ && initialized_) {
-            auto msg = spdlog::fmt_lib::format(fmt_str, std::forward<Args>(args)...);
-            logger_impl_->critical(msg);
+            logger_impl_->critical(formatString(fmt_str, std::forward<Args>(args)...));
         }
     }
 

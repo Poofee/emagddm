@@ -93,6 +93,105 @@ nlohmann::json Material::toJson() const {
     json["anisotropic_permeability"] = anisotropic_permeability_;
     json["anisotropic_conductivity"] = anisotropic_conductivity_;
     json["maxwell_specific_params"] = maxwell_specific_params_;
+
+    // 材料元信息
+    json["library"] = library_;
+    json["lib_location"] = lib_location_;
+    json["mod_since_lib"] = mod_since_lib_;
+    json["mod_time"] = mod_time_;
+    json["physics_types"] = physics_types_;
+    json["coordinate_system_type"] = coordinate_system_type_;
+    json["bulk_or_surface_type"] = bulk_or_surface_type_;
+
+    // 扩展物理属性
+    json["permittivity"] = permittivity_;
+    json["youngs_modulus"] = youngs_modulus_;
+    json["poisons_ratio"] = poisons_ratio_;
+    json["thermal_expansion_coefficient"] = thermal_expansion_coefficient_;
+
+    // B-H曲线增强信息
+    json["bh_curve_data_type"] = bh_curve_data_type_;
+    json["h_unit"] = h_unit_;
+    json["b_unit"] = b_unit_;
+    json["is_temperature_dependent"] = is_temperature_dependent_;
+
+    // 温度相关B-H曲线
+    nlohmann::json temp_bh_json;
+    for (const auto& [temp, points] : temperature_bh_curves_) {
+        std::string key = std::to_string(temp);
+        nlohmann::json points_arr;
+        for (const auto& pt : points) {
+            nlohmann::json pt_json;
+            pt_json[0] = pt.h;
+            pt_json[1] = pt.b;
+            points_arr.push_back(pt_json);
+        }
+        temp_bh_json[key] = points_arr;
+    }
+    json["temperature_bh_curves"] = temp_bh_json;
+
+    // 铁损增强
+    json["core_loss_type_choice"] = core_loss_type_choice_;
+    json["stacking_type_str"] = stacking_type_str_;
+
+    // 多频率铁损曲线
+    nlohmann::json freq_curves_json;
+    for (const auto& [freq, bp_list] : core_loss_freq_curves_) {
+        std::string key = std::to_string(freq);
+        nlohmann::json bp_arr;
+        for (const auto& [b_val, p_val] : bp_list) {
+            nlohmann::json bp_json;
+            bp_json[0] = b_val;
+            bp_json[1] = p_val;
+            bp_arr.push_back(bp_json);
+        }
+        freq_curves_json[key] = bp_arr;
+    }
+    json["core_loss_freq_curves"] = freq_curves_json;
+    json["core_loss_unit"] = core_loss_unit_;
+
+    // 铁损系数设置数据
+    if (core_loss_coeff_setup_.has_value()) {
+        nlohmann::json coeff_json;
+        coeff_json["mode"] = core_loss_coeff_setup_->mode;
+        coeff_json["frequency"] = core_loss_coeff_setup_->frequency;
+        coeff_json["thickness"] = core_loss_coeff_setup_->thickness;
+        coeff_json["conductivity"] = core_loss_coeff_setup_->conductivity;
+        nlohmann::json bp_arr;
+        for (const auto& [b_val, p_val] : core_loss_coeff_setup_->bp_curve) {
+            nlohmann::json bp_json;
+            bp_json[0] = b_val;
+            bp_json[1] = p_val;
+            bp_arr.push_back(bp_json);
+        }
+        coeff_json["bp_curve"] = bp_arr;
+        json["core_loss_coeff_setup"] = coeff_json;
+    }
+
+    // 热修正器
+    nlohmann::json tm_json;
+    for (const auto& mod : thermal_modifiers_) {
+        nlohmann::json m;
+        m["property_name"] = mod.property_name;
+        m["index"] = mod.index;
+        m["formula_string"] = mod.formula_string;
+        tm_json.push_back(m);
+    }
+    json["thermal_modifiers"] = tm_json;
+
+    // 外观数据
+    if (appearance_data_.has_value()) {
+        nlohmann::json app_json;
+        app_json["red"] = appearance_data_->red;
+        app_json["green"] = appearance_data_->green;
+        app_json["blue"] = appearance_data_->blue;
+        app_json["transparency"] = appearance_data_->transparency;
+        json["appearance_data"] = app_json;
+    }
+
+    // 备注和关键词
+    json["notes"] = notes_;
+    json["keywords"] = keywords_;
     
     return json;
 }
@@ -171,6 +270,108 @@ bool Material::fromJson(const nlohmann::json& json) {
         anisotropic_permeability_ = json.value("anisotropic_permeability", std::vector<double>());
         anisotropic_conductivity_ = json.value("anisotropic_conductivity", std::vector<double>());
         maxwell_specific_params_ = json.value("maxwell_specific_params", std::unordered_map<std::string, std::string>());
+
+        // 材料元信息
+        library_ = json.value("library", "");
+        lib_location_ = json.value("lib_location", "");
+        mod_since_lib_ = json.value("mod_since_lib", false);
+        mod_time_ = json.value("mod_time", 0LL);
+        physics_types_ = json.value("physics_types", std::vector<std::string>());
+        coordinate_system_type_ = json.value("coordinate_system_type", "Cartesian");
+        bulk_or_surface_type_ = json.value("bulk_or_surface_type", 1);
+
+        // 扩展物理属性
+        permittivity_ = json.value("permittivity", 1.0);
+        youngs_modulus_ = json.value("youngs_modulus", 0.0);
+        poisons_ratio_ = json.value("poisons_ratio", 0.0);
+        thermal_expansion_coefficient_ = json.value("thermal_expansion_coefficient", 0.0);
+
+        // B-H曲线增强信息
+        bh_curve_data_type_ = json.value("bh_curve_data_type", "normal");
+        h_unit_ = json.value("h_unit", "A_per_meter");
+        b_unit_ = json.value("b_unit", "tesla");
+        is_temperature_dependent_ = json.value("is_temperature_dependent", false);
+
+        // 温度相关B-H曲线
+        temperature_bh_curves_.clear();
+        if (json.contains("temperature_bh_curves") && json["temperature_bh_curves"].is_object()) {
+            for (const auto& [key, points_arr] : json["temperature_bh_curves"].items()) {
+                double temp = 0;
+                try { temp = std::stod(key); } catch (...) { continue; }
+                std::vector<BHDataPoint> bh_points;
+                for (const auto& pt : points_arr) {
+                    BHDataPoint dp;
+                    dp.h = pt[0].get<double>();
+                    dp.b = pt[1].get<double>();
+                    bh_points.push_back(dp);
+                }
+                temperature_bh_curves_[temp] = bh_points;
+            }
+        }
+
+        // 铁损增强
+        core_loss_type_choice_ = json.value("core_loss_type_choice", "");
+        stacking_type_str_ = json.value("stacking_type_str", "Solid");
+
+        // 多频率铁损曲线
+        core_loss_freq_curves_.clear();
+        if (json.contains("core_loss_freq_curves") && json["core_loss_freq_curves"].is_object()) {
+            for (const auto& [key, bp_arr] : json["core_loss_freq_curves"].items()) {
+                double freq = 0;
+                try { freq = std::stod(key); } catch (...) { continue; }
+                std::vector<std::pair<double, double>> bp_list;
+                for (const auto& pt : bp_arr) {
+                    bp_list.push_back({pt[0].get<double>(), pt[1].get<double>()});
+                }
+                core_loss_freq_curves_[freq] = bp_list;
+            }
+        }
+        core_loss_unit_ = json.value("core_loss_unit", "w_per_kg");
+
+        // 铁损系数设置数据
+        core_loss_coeff_setup_.reset();
+        if (json.contains("core_loss_coeff_setup") && json["core_loss_coeff_setup"].is_object()) {
+            const auto& coeff_json = json["core_loss_coeff_setup"];
+            CoreLossCoefficientSetup coeff;
+            coeff.mode = coeff_json.value("mode", "");
+            coeff.frequency = coeff_json.value("frequency", 0.0);
+            coeff.thickness = coeff_json.value("thickness", "");
+            coeff.conductivity = coeff_json.value("conductivity", "");
+            if (coeff_json.contains("bp_curve") && coeff_json["bp_curve"].is_array()) {
+                for (const auto& pt : coeff_json["bp_curve"]) {
+                    coeff.bp_curve.push_back({pt[0].get<double>(), pt[1].get<double>()});
+                }
+            }
+            core_loss_coeff_setup_ = coeff;
+        }
+
+        // 热修正器
+        thermal_modifiers_.clear();
+        if (json.contains("thermal_modifiers") && json["thermal_modifiers"].is_array()) {
+            for (const auto& tm : json["thermal_modifiers"]) {
+                ThermalModifier mod;
+                mod.property_name = tm.value("property_name", "");
+                mod.index = tm.value("index", 0);
+                mod.formula_string = tm.value("formula_string", "");
+                thermal_modifiers_.push_back(mod);
+            }
+        }
+
+        // 外观数据
+        appearance_data_.reset();
+        if (json.contains("appearance_data") && json["appearance_data"].is_object()) {
+            const auto& app_json = json["appearance_data"];
+            appearance_data_ = MaterialAppearance{
+                app_json.value("red", 200),
+                app_json.value("green", 200),
+                app_json.value("blue", 200),
+                app_json.value("transparency", 0.0)
+            };
+        }
+
+        // 备注和关键词
+        notes_ = json.value("notes", "");
+        keywords_ = json.value("keywords", "");
         
         return true;
     } catch (const std::exception& e) {

@@ -90,29 +90,32 @@ struct MaterialProperty {
 };
 
 struct BHDataPoint {
-    double h; 
+    double h;
     double b;
+};
+
+// Material内部使用的辅助数据结构（独立定义，不属于Material公共接口）
+struct CoreLossCoefficientSetup {
+    std::string mode;
+    double frequency = 0;
+    std::string thickness;
+    std::string conductivity;
+    std::vector<std::pair<double, double>> bp_curve;
+};
+
+struct ThermalModifier {
+    std::string property_name;
+    int index = 0;
+    std::string formula_string;
+};
+
+struct MaterialAppearance {
+    int red = 200, green = 200, blue = 200;
+    double transparency = 0.0;
 };
 
 class Material : public ISerializable {
 public:
-    // 嵌套结构体定义（供公共接口使用，必须在方法声明之前）
-    struct CoreLossCoefficientSetup {
-        std::string mode;
-        double frequency = 0;
-        std::string thickness;
-        std::string conductivity;
-        std::vector<std::pair<double, double>> bp_curve;
-    };
-    struct ThermalModifier {
-        std::string property_name;
-        int index = 0;
-        std::string formula_string;
-    };
-    struct MaterialAppearance {
-        int red = 200, green = 200, blue = 200;
-        double transparency = 0.0;
-    };
 
     Material(const std::string& name);
     Material() = default; // 默认构造函数用于反序列化
@@ -924,6 +927,18 @@ public:
     const std::string& getAngularVelocity() const { return angular_velocity_; }
     void setBandNameRef(int ref) { band_name_ref_ = ref; }
     int getBandNameRef() const { return band_name_ref_; }
+    void setCoordinateSystem(int cs) { coordinate_system_ = cs; }
+    int getCoordinateSystem() const { return coordinate_system_; }
+    void setIsPositive(bool positive) { is_positive_ = positive; }
+    bool isPositive() const { return is_positive_; }
+    void setHasRotateLimit(bool limit) { has_rotate_limit_ = limit; }
+    bool hasRotateLimit() const { return has_rotate_limit_; }
+    void setNonCylindrical(bool non_cyl) { non_cylindrical_ = non_cyl; }
+    bool isNonCylindrical() const { return non_cylindrical_; }
+    void setConsiderMechanicalTransient(bool consider) { consider_mechanical_transient_ = consider; }
+    bool isConsiderMechanicalTransient() const { return consider_mechanical_transient_; }
+    void setLinearVelocity(const std::string& vel) { linear_velocity_ = vel; }
+    const std::string& getLinearVelocity() const { return linear_velocity_; }
     void addMovingObject(int obj_id);
     void addObject(int obj_id);
     const std::vector<int>& getObjects() const { return objects_; }

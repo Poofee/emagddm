@@ -248,7 +248,13 @@ void AedtProjectLoader::convertAndAddMaterials(ProjectManager& manager,
         if (mat_json.contains("temperature_bh_curves") && mat_json["temperature_bh_curves"].is_object()) {
             std::map<double, std::vector<BHDataPoint>> temp_curves;
             for (auto& [temp_key, points_arr] : mat_json["temperature_bh_curves"].items()) {
-                double temp = std::stod(temp_key);
+                double temp = 0;
+                try {
+                    temp = std::stod(temp_key);
+                } catch (const std::exception& e) {
+                    FEEM_WARN("Invalid temperature key '{}': {}", temp_key, e.what());
+                    continue;
+                }
                 std::vector<BHDataPoint> bh_points;
                 for (const auto& pt : points_arr) {
                     BHDataPoint dp;
@@ -265,7 +271,13 @@ void AedtProjectLoader::convertAndAddMaterials(ProjectManager& manager,
         if (mat_json.contains("core_loss_freq_curves") && mat_json["core_loss_freq_curves"].is_object()) {
             std::map<double, std::vector<std::pair<double, double>>> freq_curves;
             for (auto& [freq_key, bp_arr] : mat_json["core_loss_freq_curves"].items()) {
-                double freq = std::stod(freq_key);
+                double freq = 0;
+                try {
+                    freq = std::stod(freq_key);
+                } catch (const std::exception& e) {
+                    FEEM_WARN("Invalid frequency key '{}': {}", freq_key, e.what());
+                    continue;
+                }
                 std::vector<std::pair<double, double>> bp_points;
                 for (const auto& pt : bp_arr) {
                     bp_points.push_back({pt[0].get<double>(), pt[1].get<double>()});
@@ -278,7 +290,7 @@ void AedtProjectLoader::convertAndAddMaterials(ProjectManager& manager,
         // 热修正器
         if (mat_json.contains("thermal_modifiers") && mat_json["thermal_modifiers"].is_array()) {
             for (const auto& tm : mat_json["thermal_modifiers"]) {
-                Material::ThermalModifier mod;
+                ThermalModifier mod;
                 mod.property_name = tm.value("property_name", "");
                 mod.index = tm.value("index", 0);
                 mod.formula_string = tm.value("formula_string", "");
@@ -445,7 +457,7 @@ void AedtProjectLoader::convertAndAddSolutionSetup(ProjectManager& manager,
     setup->setErrorOutput(setup_json.value("output_error", false));
     setup->setFastReachSteadyState(setup_json.value("fast_reach_steady_state", true));
     setup->setAutoDetectSteadyState(setup_json.value("auto_detect_steady_state", true));
-    setup->setStopCriterion(safeGetDouble(setup_json["stop_criterion"], 0.005));
+    setup->setStopCriterion(setup_json.value("stop_criterion", 0.005));
     setup->setSaveFieldsType(setup_json.value("save_fields_type", ""));
     setup->setNSteps(setup_json.value("n_steps", ""));
     setup->setStepsFrom(setup_json.value("steps_from", ""));
@@ -454,7 +466,7 @@ void AedtProjectLoader::convertAndAddSolutionSetup(ProjectManager& manager,
     setup->setInitialTimeStep(setup_json.value("initial_time_step", ""));
     setup->setMinTimeStep(setup_json.value("min_time_step", ""));
     setup->setMaxTimeStep(setup_json.value("max_time_step", ""));
-    setup->setTimeStepErrTolerance(safeGetDouble(setup_json["time_step_err_tolerance"], 0.0001));
+    setup->setTimeStepErrTolerance(setup_json.value("time_step_err_tolerance", 0.0001));
 
     manager.addSolutionSetup(setup);
 
