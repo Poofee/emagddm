@@ -328,3 +328,26 @@ target_link_libraries(test_shape_function
 )
 
 add_test(NAME test_shape_function COMMAND test_shape_function)
+
+# 电磁场有限元单元矩阵计算模块测试
+add_executable(test_em_element_integrator
+    test_em_element_integrator.cpp
+)
+
+target_include_directories(test_em_element_integrator
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/numeric
+        ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/lib/eigen
+)
+
+target_link_libraries(test_em_element_integrator
+    PRIVATE
+        numeric_lib
+        spdlog_lib
+        GTest::gtest
+        GTest::gtest_main
+)
+
+add_test(NAME test_em_element_integrator COMMAND test_em_element_integrator)
