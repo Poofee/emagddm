@@ -351,3 +351,53 @@ target_link_libraries(test_em_element_integrator
 )
 
 add_test(NAME test_em_element_integrator COMMAND test_em_element_integrator)
+
+# ==================== 电磁网格模块测试（方案C架构）====================
+
+# 二维静磁标量位网格测试（TRI3单元）
+add_executable(test_2d_mesh
+    ../tests/test_2d_mesh.cpp
+)
+
+target_include_directories(test_2d_mesh
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/fe_em
+        ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/include/numeric      # 新增：支持ElemType枚举
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+        ${CMAKE_SOURCE_DIR}/lib/eigen                # 新增：Eigen库（shape_function_base.hpp依赖）
+)
+
+target_link_libraries(test_2d_mesh
+    PRIVATE
+        tool_lib
+        fe_em_lib
+        spdlog_lib
+)
+
+add_test(NAME test_2d_mesh COMMAND test_2d_mesh)
+
+# 三维涡流场A-V混合格式测试（TET4单元）
+add_executable(test_3d_mesh
+    ../tests/test_3d_mesh.cpp
+)
+
+target_include_directories(test_3d_mesh
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/fe_em
+        ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/include/numeric      # 新增：支持ElemType枚举
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+        ${CMAKE_SOURCE_DIR}/lib/eigen                # 新增：Eigen库（shape_function_base.hpp依赖）
+)
+
+target_link_libraries(test_3d_mesh
+    PRIVATE
+        tool_lib
+        fe_em_lib
+        spdlog_lib
+)
+
+add_test(NAME test_3d_mesh COMMAND test_3d_mesh)

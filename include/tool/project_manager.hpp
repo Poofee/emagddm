@@ -14,6 +14,7 @@
 #include "tool/xml_interface.hpp"
 #include "tool/project_loader.hpp"
 #include "tool/em_exception.hpp"
+#include "fe_em/em_mesh_data.hpp"
 #include <string>
 #include <memory>
 #include <unordered_map>
@@ -61,6 +62,30 @@ public:
 
     void setMesh(MeshPtr mesh);
     std::optional<MeshPtr> getMesh() const { return mesh_; }
+
+    // ========== 电磁网格拓扑数据管理（方案C架构） ==========
+    /**
+     * @brief 设置电磁网格拓扑数据
+     * @param data 网格拓扑数据（转移所有权）
+     * 
+     * @note 架构说明：
+     *       - mesh_ (tool::Mesh): 存储**网格剖分配置参数**（max_size, boundary_layer等）
+     *       - em_mesh_data_ (fe_em::EMMeshData): 存储**网格拓扑数据**（节点坐标、单元连接关系）
+     *       - 两者职责分离，统一由ProjectManager管理
+     */
+    void setEMMeshData(std::unique_ptr<fe_em::EMMeshData> data);
+    
+    /**
+     * @brief 获取电磁网格拓扑数据
+     * @return fe_em::EMMeshData* 网格拓扑数据指针（不转移所有权，可为nullptr）
+     */
+    fe_em::EMMeshData* getEMMeshData() const;
+    
+    /**
+     * @brief 检查是否有网格拓扑数据
+     * @return bool 如果存在返回true
+     */
+    bool hasEMMeshData() const;
 
     void addSolutionSetup(SolutionSetupPtr setup);
     bool removeSolutionSetup(const std::string& name);
@@ -141,7 +166,8 @@ private:
     std::optional<GeometryPtr> geometry_;
     std::unordered_map<std::string, BoundaryPtr> boundaries_;
     std::unordered_map<std::string, ExcitationPtr> excitations_;
-    std::optional<MeshPtr> mesh_;
+    std::optional<MeshPtr> mesh_;                    ///< 网格剖分配置参数（tool::Mesh对象）
+    std::unique_ptr<fe_em::EMMeshData> em_mesh_data_; ///< 网格拓扑数据（fe_em::EMMeshData对象，方案C架构）
     std::unordered_map<std::string, SolutionSetupPtr> solution_setups_;
 
     // 绕组组集合 (Winding Group)

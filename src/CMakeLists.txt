@@ -21,11 +21,17 @@ target_include_directories(fe_em_lib
     PRIVATE
         ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_SOURCE_DIR}/include/fe_em
+        ${CMAKE_SOURCE_DIR}/include/numeric      # 新增：支持ElemType枚举
+        ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+        ${CMAKE_SOURCE_DIR}/lib/eigen                # 新增：Eigen库（shape_function_base.hpp依赖）
 )
 
 if(USE_MPI)
     target_link_libraries(fe_em_lib PRIVATE ${MPI_CXX_LIBRARIES})
 endif()
+
+target_link_libraries(fe_em_lib PRIVATE tool_lib spdlog_lib)
 
 message(STATUS "  fe_em_lib  : ${fe_em_lib_SOURCES}")
 
@@ -90,9 +96,12 @@ target_include_directories(tool_lib
     PRIVATE
         ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/include/fe_em          # 新增：支持EMMeshData（方案C架构）
+        ${CMAKE_SOURCE_DIR}/include/numeric         # 新增：支持ElemType枚举（消除字符串）
         ${CMAKE_SOURCE_DIR}/lib/spdlog/include
         ${CMAKE_SOURCE_DIR}/lib/pugixml/src
         ${CMAKE_SOURCE_DIR}/lib/nlohmann
+        ${CMAKE_SOURCE_DIR}/lib/eigen                # 新增：Eigen库（shape_function_base.hpp依赖）
 )
 
 target_link_libraries(tool_lib

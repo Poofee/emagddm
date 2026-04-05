@@ -52,6 +52,7 @@ bool ProjectManager::createProject(const std::string& name, const std::string& f
     boundaries_.clear();
     excitations_.clear();
     mesh_.reset();
+    em_mesh_data_.reset();  // 清空网格拓扑数据
     solution_setups_.clear();
     windings_.clear();
     motion_setups_.clear();
@@ -273,6 +274,27 @@ std::optional<ExcitationPtr> ProjectManager::getExcitation(const std::string& na
 void ProjectManager::setMesh(MeshPtr mesh) {
     mesh_ = mesh;
     is_modified_ = true;
+}
+
+void ProjectManager::setEMMeshData(std::unique_ptr<fe_em::EMMeshData> data) {
+    em_mesh_data_ = std::move(data);
+    is_modified_ = true;
+    
+    if (em_mesh_data_) {
+        FEEM_INFO("EM mesh data set: {} nodes, {} elements", 
+                  em_mesh_data_->getNodeCount(), 
+                  em_mesh_data_->getElementCount());
+    } else {
+        FEEM_INFO("EM mesh data cleared (nullptr)");
+    }
+}
+
+fe_em::EMMeshData* ProjectManager::getEMMeshData() const {
+    return em_mesh_data_.get();
+}
+
+bool ProjectManager::hasEMMeshData() const {
+    return em_mesh_data_ != nullptr;
 }
 
 void ProjectManager::addSolutionSetup(SolutionSetupPtr setup) {
