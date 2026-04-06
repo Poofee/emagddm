@@ -184,18 +184,34 @@ bool EMAssembly::assemble(
     // 清空上次组装结果
     clear();
 
-    // 计算（估算）总DOF数（用于COO矩阵维度）
+    // 计算（估算）总自由DOF数（用于COO矩阵维度）
+    // 算法：遍历所有单元的Local2Global映射表，
+    //       统计所有非负索引的最大值 + 1（因为索引从0开始）
+    // 注意：仅统计 >= 0 的索引（-1表示受Dirichlet约束的DOF）
     int total_dofs = 0;
+    bool has_valid_dof = false;
+
     for (const auto& l2g : elem_local_to_global) {
-        int max_idx = 0;
+        int max_idx = -1;  // 初始为-1，表示尚未找到有效DOF
+
         for (int idx : l2g.indices) {
-            if (idx > max_idx) {
+            // 仅考虑非负索引（>= 0 表示自由DOF）
+            if (idx >= 0 && idx > max_idx) {
                 max_idx = idx;
+                has_valid_dof = true;
             }
         }
-        if (max_idx >= total_dofs) {
+
+        // 更新全局最大值（仅在找到有效DOF时）
+        if (max_idx >= 0 && max_idx >= total_dofs - 1) {
             total_dofs = max_idx + 1;
         }
+    }
+
+    // 特殊情况处理：如果没有任何自由DOF（全部被约束）
+    if (!has_valid_dof) {
+        total_dofs = 0;
+        FEEM_WARN("assemble: 所有DOF均受约束（无自由DOF），将返回空矩阵");
     }
 
     if (total_dofs <= 0) {
