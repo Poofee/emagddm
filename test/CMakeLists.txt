@@ -401,3 +401,81 @@ target_link_libraries(test_3d_mesh
 )
 
 add_test(NAME test_3d_mesh COMMAND test_3d_mesh)
+
+# 一阶金字塔纯棱边格式DOF管理测试（PYRAMID5_EDGE单元）
+add_executable(test_pyramid5_edge
+    test_pyramid5_edge.cpp
+)
+
+target_include_directories(test_pyramid5_edge
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/fe_em
+        ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/include/numeric
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+        ${CMAKE_SOURCE_DIR}/lib/eigen
+)
+
+target_link_libraries(test_pyramid5_edge
+    PRIVATE
+        tool_lib
+        fe_em_lib
+        spdlog_lib
+        GTest::gtest
+        GTest::gtest_main
+)
+
+add_test(NAME test_pyramid5_edge COMMAND test_pyramid5_edge)
+
+# PRISM15纯标量格式DOF管理测试
+add_executable(test_prism15_scalar
+    test_prism15_scalar.cpp
+)
+
+target_include_directories(test_prism15_scalar
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/fe_em
+        ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/include/numeric
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+        ${CMAKE_SOURCE_DIR}/lib/eigen
+)
+
+target_link_libraries(test_prism15_scalar
+    PRIVATE
+        tool_lib
+        fe_em_lib
+        spdlog_lib
+        GTest::gtest
+        GTest::gtest_main
+)
+
+add_test(NAME test_prism15_scalar COMMAND test_prism15_scalar)
+
+# PRISM6混合A-V格式DOF管理完整测试（GlobalEdgeIDGenerator + EMDOFManager）
+add_executable(test_prism6_mixed_av
+    test_prism6_mixed_av.cpp
+)
+
+target_include_directories(test_prism6_mixed_av
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/fe_em
+        ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/include/numeric
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+        ${CMAKE_SOURCE_DIR}/lib/eigen
+)
+
+target_link_libraries(test_prism6_mixed_av
+    PRIVATE
+        tool_lib
+        fe_em_lib
+        spdlog_lib
+        GTest::gtest
+        GTest::gtest_main
+)
+
+add_test(NAME test_prism6_mixed_av COMMAND test_prism6_mixed_av)

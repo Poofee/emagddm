@@ -313,6 +313,22 @@ static std::unordered_map<ElemType, ElementGeometryDef> initialize_geometry_defi
         }
     };
     
+    // ==================== Nedelec棱边元几何定义（复用基础类型的拓扑）====================
+    // Nedelec一阶棱边元与对应的Lagrange节点元共享完全相同的几何拓扑定义
+    // 区别仅在于自由度定义在棱边上而非节点上
+    
+    // TET4_EDGE: 四面体一阶Nedelec棱边元（6条棱边自由度）
+    defs[ElemType::TET4_EDGE] = defs[ElemType::TET4];
+    
+    // HEX8_EDGE: 六面体一阶Nedelec棱边元（12条棱边自由度）
+    defs[ElemType::HEX8_EDGE] = defs[ElemType::HEX8];
+    
+    // PRISM6_EDGE: 三棱柱一阶Nedelec棱边元（9条棱边自由度）
+    defs[ElemType::PRISM6_EDGE] = defs[ElemType::PRISM6];
+    
+    // PYRAMID5_EDGE: 金字塔一阶Nedelec棱边元（8条棱边自由度）
+    defs[ElemType::PYRAMID5_EDGE] = defs[ElemType::PYRAMID5];
+    
     return defs;
 }
 
