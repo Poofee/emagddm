@@ -203,7 +203,8 @@ bool EMAssembly::assemble(
         }
 
         // 更新全局最大值（仅在找到有效DOF时）
-        if (max_idx >= 0 && max_idx >= total_dofs - 1) {
+        // 修正：使用 max_idx >= total_dofs 避免total_dofs=0时的边界问题
+        if (max_idx >= 0 && max_idx >= total_dofs) {
             total_dofs = max_idx + 1;
         }
     }

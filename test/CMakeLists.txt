@@ -162,6 +162,8 @@ target_include_directories(test_tool_modules
     PRIVATE
         ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/include/numeric      # 新增：支持 shape_function_base.hpp
+        ${CMAKE_SOURCE_DIR}/lib/eigen            # 新增：Eigen 库依赖
         ${CMAKE_SOURCE_DIR}/lib/pugixml/src
 )
 
@@ -504,3 +506,80 @@ target_link_libraries(test_assembly
 )
 
 add_test(NAME test_assembly COMMAND test_assembly)
+
+# ==================== 线性求解器测试：A-V混合涡流场（PRISM6混合单元）====================
+add_executable(test_linear_solver_mixed_av
+    test_linear_solver_mixed_av.cpp
+)
+
+target_include_directories(test_linear_solver_mixed_av
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/numeric
+        ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+        ${CMAKE_SOURCE_DIR}/lib/eigen
+)
+
+target_link_libraries(test_linear_solver_mixed_av
+    PRIVATE
+        numeric_lib
+        tool_lib
+        spdlog_lib
+)
+
+add_test(NAME test_linear_solver_mixed_av COMMAND test_linear_solver_mixed_av)
+
+# ==================== 线性求解器棱边单元测试（PYRAMID5_EDGE）====================
+
+add_executable(test_linear_solver_edge
+    test_linear_solver_edge.cpp
+)
+
+target_include_directories(test_linear_solver_edge
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/numeric
+        ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+        ${CMAKE_SOURCE_DIR}/lib/eigen
+)
+
+target_link_libraries(test_linear_solver_edge
+    PRIVATE
+        numeric_lib
+        tool_lib
+        spdlog_lib
+        GTest::gtest
+        GTest::gtest_main
+)
+
+add_test(NAME test_linear_solver_edge COMMAND test_linear_solver_edge)
+
+# ==================== 线性求解器标量场测试（PRISM15单元）====================
+# Task 6: 测试用例1 - 标量场泊松方程求解（PRISM15单元）
+# 验证 SymmetricDirectSolver 在 15×15 对称正定刚度矩阵上的正确性
+
+add_executable(test_linear_solver_scalar
+    test_linear_solver_scalar.cpp
+)
+
+target_include_directories(test_linear_solver_scalar
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/numeric
+        ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+        ${CMAKE_SOURCE_DIR}/lib/eigen
+)
+
+target_link_libraries(test_linear_solver_scalar
+    PRIVATE
+        numeric_lib
+        tool_lib
+        spdlog_lib
+        GTest::gtest
+        GTest::gtest_main
+)
+
+add_test(NAME test_linear_solver_scalar COMMAND test_linear_solver_scalar)

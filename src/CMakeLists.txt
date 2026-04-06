@@ -126,6 +126,8 @@ target_include_directories(app_lib
     PRIVATE
         ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_SOURCE_DIR}/include/app
+        ${CMAKE_SOURCE_DIR}/include/numeric      # 新增：支持 shape_function_base.hpp
+        ${CMAKE_SOURCE_DIR}/lib/eigen            # 新增：Eigen 库依赖
         ${CMAKE_SOURCE_DIR}/lib/spdlog/include
         ${CMAKE_SOURCE_DIR}/lib/nlohmann
 )
