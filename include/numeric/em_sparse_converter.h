@@ -11,6 +11,7 @@
 #pragma once
 
 #include "csr_matrix.hpp"
+#include <Eigen/Core>
 #include <Eigen/Sparse>
 #include <vector>
 #include <string>

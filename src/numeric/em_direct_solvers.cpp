@@ -76,7 +76,7 @@ bool DirectBackendManager::isBackendAvailable(DirectBackendType type) {
             return false;
 #endif
         default:
-            FEEM_ERROR("DirectBackendManager::isBackendUnknown - 未知的后端类型");
+            FEEM_ERROR("DirectBackendManager::isBackendAvailable - 未知的后端类型: {}", static_cast<int>(type));
             return false;
     }
 }
