@@ -479,3 +479,28 @@ target_link_libraries(test_prism6_mixed_av
 )
 
 add_test(NAME test_prism6_mixed_av COMMAND test_prism6_mixed_av)
+
+# EMAssembly全局装配模块完整测试套件
+add_executable(test_assembly
+    test_assembly.cpp
+)
+
+target_include_directories(test_assembly
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/fe_em
+        ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/include/numeric
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+        ${CMAKE_SOURCE_DIR}/lib/eigen
+)
+
+target_link_libraries(test_assembly
+    PRIVATE
+        numeric_lib
+        fe_em_lib
+        tool_lib
+        spdlog_lib
+)
+
+add_test(NAME test_assembly COMMAND test_assembly)
