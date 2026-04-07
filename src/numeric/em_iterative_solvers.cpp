@@ -1300,7 +1300,7 @@ void ScalarAMG::gauss_seidel_smooth_backward(const Eigen::SparseMatrix<double>& 
 
 // ==================== 工厂函数实现 ====================
 
-std::unique_ptr<void> create_preconditioner(
+std::unique_ptr<int> create_preconditioner(
     IterativeSolverConfig::PreconditionerType type,
     const Eigen::SparseMatrix<double>& /*A*/) {
 

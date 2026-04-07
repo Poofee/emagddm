@@ -19,6 +19,7 @@
  */
 
 #include "magnetic_scalar_2d_integrator.hpp"
+#include "math_constants.hpp"
 
 namespace numeric {
 
@@ -42,9 +43,9 @@ MagneticScalar2DIntegrator::MagneticScalar2DIntegrator(ElementType element_type)
 
     // 设置默认材料参数：真空磁导率μ₀、零电导率、线性材料
     MaterialProperties default_props;
-    default_props.mu = 4.0 * M_PI * 1e-7;       // 真空磁导率 μ₀ = 4π×10⁻⁷ H/m
+    default_props.mu = MU0;                    // 真空磁导率 μ₀ = 4π×10⁻⁷ H/m
     default_props.sigma = 0.0;                    // 默认无耗散（绝缘体/空气）
-    default_props.epsilon = 8.854187817e-12;     // 介电常数（本模块不使用，但需设置）
+    default_props.epsilon = EPSILON0;            // 介电常数（本模块不使用，但需设置）
     default_props.is_nonlinear_mu = false;        // 默认线性磁导率
     default_props.is_nonlinear_sigma = false;     // 默认线性电导率
     material_props_ = default_props;

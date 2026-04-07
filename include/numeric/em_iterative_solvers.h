@@ -857,7 +857,7 @@ protected:
  * }
  * @endcode
  */
-std::unique_ptr<void> create_preconditioner(
+std::unique_ptr<int> create_preconditioner(
     IterativeSolverConfig::PreconditionerType type,
     const Eigen::SparseMatrix<double>& A);
 
