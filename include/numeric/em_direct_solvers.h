@@ -76,6 +76,206 @@
 
 namespace numeric {
 
+#if EM_SOLVER_HAS_SUPERLU
+
+/**
+ * @class SuperluContext
+ * @brief SuperLU_MT 数据结构 RAII 封装，管理完整的 LU 分解生命周期
+ * @details 封装 SuperLU_MT 所有的 C 语言数据结构和资源，提供类型安全的 C++ 接口。
+ *          严格遵循官方示例（pdgssv.c / pdlinsolx.c / pdspmd.c）的正确调用顺序：
+ *
+ * @par 生命周期（严格遵循官方流程）：
+ * @code
+ * // 1. 初始化阶段（setup）
+ * ctx.initialize(n, nnz, values, rowind, colptr);
+ *
+ * // 2. 分解阶段（factorize）—— 仅需一次
+ * ctx.factorize(nprocs);
+ *
+ * // 3. 求解阶段（solve） —— 可重复调用
+ * for (each rhs) {
+ *     Eigen::VectorXd x = ctx.solve(b);
+ * }
+ *
+ * // 4. 自动析构（RAII），或手动调用 reset()
+ * @endcode
+ *
+ * @par 官方调用顺序对照：
+ * - pdgssv.c: get_perm_c → pdgstrf_init → pdgstrf → dgstrs → pdgstrf_finalize → Destroy_*
+ * - pdspmd.c: get_perm_c → pdgstrf_init → (threaded) pdgstrf → dgstrs → pxgstrf_finalize → Destroy_*
+ * - 本封装严格按照此顺序实现，修复了原始代码中缺少 init/finalize 的致命问题
+ *
+ * @par 内存安全保证：
+ * - 所有 SuperLU_MT 分配的内存通过对应的 Destroy/SUPERLU_FREE 正确释放
+ * - L 因子使用 Destroy_SuperNode_SCP（SCP格式专用）
+ * - U 因子使用 Destroy_CompCol_NCP（NCP格式专用）
+ * - A 矩阵使用 Destroy_CompCol_Matrix（NC格式专用）
+ * - 析构函数保证无资源泄漏
+ *
+ * @warning 此类非线程安全，外部需同步保护 factorize/solve 调用
+ * @note 依赖 slu_mt_ddefs.h 中声明的所有 SuperLU_MT API
+ */
+class SuperluContext {
+public:
+    /**
+     * @brief 默认构造函数，将所有内部状态初始化为未就绪
+     */
+    SuperluContext();
+
+    /**
+     * @brief 析构函数，自动释放所有 SuperLU_MT 资源
+     * @details 按照正确的逆序释放所有分配的内存和数据结构，
+     *          确保无内存泄漏。等价于调用 reset()。
+     */
+    ~SuperluContext();
+
+    /** 禁止拷贝（管理唯一资源） */
+    SuperluContext(const SuperluContext&) = delete;
+    SuperluContext& operator=(const SuperluContext&) = delete;
+
+    /** 允许移动语义（支持 std::unique_ptr 等场景） */
+    SuperluContext(SuperluContext&& other) noexcept;
+    SuperluContext& operator=(SuperluContext&& other) noexcept;
+
+    /**
+     * @brief 初始化 CSC 格式系数矩阵并预分配所有辅助数据结构
+     * @param n   矩阵维度（方阵，行数=列数）
+     * @param nnz 非零元素个数
+     * @param nzval 非零值数组（长度 nnz，所有权转移至本对象）
+     * @param rowind 行索引数组（长度 nnz，0-based，所有权转移至本对象）
+     * @param colptr 列指针数组（长度 n+1，0-based，所有权转移至本对象）
+     * @return true 初始化成功
+     * @return false 内存分配失败或参数非法
+     *
+     * @details 执行以下操作（对应官方示例的初始化部分）：
+     * 1. 调用 dCreate_CompCol_Matrix 创建 SuperMatrix A（CSC/NC 格式）
+     * 2. 分配 perm_c[] 和 perm_r[] 置换向量
+     * 3. 调用 get_perm_c() 计算列置换（最小度排序）
+     * 4. 分配 etree[], colcnt_h[], part_super_h[] 辅助数组
+     * 5. 配置 superlumt_options_t 默认参数
+     *
+     * @pre nzval/rowind/colptr 必须由 doubleMalloc/intMalloc 分配（SuperLU_MT 内存管理一致性）
+     * @post 内部状态为 INITIALIZED，可调用 factorize()
+     * @note 调用后传入的数组指针所有权转移至本对象，不应再由调用方释放
+     */
+    bool initialize(int_t n, int_t nnz, double* nzval, int_t* rowind, int_t* colptr);
+
+    /**
+     * @brief 执行并行 LU 分解（PA = LU）
+     * @param nprocs 并行线程数（推荐值：1~硬件线程数）
+     * @return 0 成功；>0 矩阵奇异（info=列号）；<0 参数错误或内存不足
+     *
+     * @details 严格按官方三步流程执行：
+     * 1. **pdgstrf_init**: 初始化选项、计算消去树和列计数、创建置换后矩阵 AC
+     * 2. **pdgstrf**: 并行 LU 分解，生成 L（SCP超节点格式）和 U（NCP列置换格式）
+     * 3. **pdgstrf_finalize**: 清理 AC 矩阵和分解过程中的临时数据结构
+     *
+     * @pre 必须已成功调用 initialize()
+     * @post 内部状态为 FACTORIZED，可重复调用 solve()
+     * @warning 重复调用会先自动清理旧的 L/U 因子
+     */
+    int_t factorize(int_t nprocs = 1);
+
+    /**
+     * @brief 使用缓存的 L/U 因子执行三角回代求解
+     * @param b 右端项向量（维度必须与 initialize 时的 n 一致）
+     * @return SolverResult 包含解向量和状态信息
+     *
+     * @details 执行流程：
+     * 1. 将 Eigen 向量转换为 SuperLU_DenseMatrix 格式
+     * 2. 调用 dgstrs() 执行三角系统求解：Ly=Pb, Ux=y
+     * 3. 从结果 DenseMatrix 提取解向量到 Eigen::VectorXd
+     * 4. 释放临时 DenseMatrix 及其数据数组
+     *
+     * @pre 必须已成功调用 factorize()
+     * @note 可多次调用以复用 L/U 因子（瞬态分析核心优化路径）
+     */
+    SolverResult solve(const Eigen::VectorXd& b);
+
+    /**
+     * @brief 重置所有内部状态并释放全部资源
+     * @details 按照与初始化相反的顺序释放所有 SuperLU_MT 数据结构，
+     *          使对象回到刚构造后的初始状态。可安全重复调用。
+     *
+     * @par 释放顺序（严格遵循官方示例的清理模式）：
+     * 1. 若已分解：Destroy_SuperNode_SCP(L), Destroy_CompCol_NCP(U)
+     * 2. 若有 AC 矩阵：pxgstrf_finalize(options, &AC)
+     * 3. 若有 A 矩阵：Destroy_CompCol_Matrix(A)
+     * 4. SUPERLU_FREE(perm_r, perm_c)
+     * 5. SUPERLU_FREE(etree, colcnt_h, part_super_h)
+     * 6. StatFree(Gstat) 若已分配
+     */
+    void reset();
+
+    /**
+     * @brief 检查是否已完成 LU 分解且可进行求解
+     * @return true 已分解，solve() 可用
+     */
+    bool is_factored() const { return state_ == State::FACTORIZED; }
+
+    /**
+     * @brief 检查是否已初始化（至少调用了 initialize）
+     * @return true 已初始化
+     */
+    bool is_initialized() const { return state_ == State::INITIALIZED || state_ == State::FACTORIZED; }
+
+    /**
+     * @brief 获取矩阵维度
+     * @return 矩阵阶数 n（initialize 后有效）
+     */
+    int_t matrix_size() const { return n_; }
+
+private:
+    /**
+     * @brief 内部状态枚举，严格控制操作顺序
+     */
+    enum class State {
+        UNINITIALIZED,   ///< 未初始化（初始状态 / reset 后）
+        INITIALIZED,     ///< 已初始化系数矩阵和辅助结构（initialize 后）
+        FACTORIZED       ///< 已完成 LU 分解（factorize 后）
+    };
+
+    State state_ = State::UNINITIALIZED;  ///< 当前生命周期状态
+
+    int_t n_ = 0;       ///< 矩阵维度
+    int_t nnz_ = 0;     ///< 非零元数
+
+    // ========== SuperLU_MT 核心数据结构 ==========
+    // 对应官方示例中的局部变量，统一封装为成员变量管理生命周期
+
+    std::unique_ptr<SuperMatrix> A_;       ///< 系数矩阵（CSC/NC 格式，dCreate_CompCol_Matrix 创建）
+    std::unique_ptr<SuperMatrix> L_;       ///< L 因子（SCP 超节点格式，pdgstrf 输出）
+    std::unique_ptr<SuperMatrix> U_;       ///< U 因子（NCP 列置换格式，pdgstrf 输出）
+    std::unique_ptr<SuperMatrix> AC_;      ///< 列置换后矩阵（pdgstrf_init 创建，pdgstrf_finalize 销毁）
+
+    std::unique_ptr<int_t[]> perm_c_;      ///< 列置换向量（get_perm_c 计算 + pdgstrf 修改）
+    std::unique_ptr<int_t[]> perm_r_;      ///< 行置换向量（pdgstrf 输出）
+
+    std::unique_ptr<int_t[]> etree_;       ///< 消去树（pdgstrf_init 计算，维度 n）
+    std::unique_ptr<int_t[]> colcnt_h_;    ///< 列计数（pdgstrf_init 计算，维度 n）
+    std::unique_ptr<int_t[]> part_super_h_;///< 超节点划分（pdgstrf_init 计算，维度 n）
+
+    std::unique_ptr<superlumt_options_t> options_;  ///< 求解选项配置（pdgstrf_init 填充）
+    std::unique_ptr<Gstat_t> Gstat_;                ///< 统计信息结构（StatAlloc/StatInit/StatFree）
+
+    /**
+     * @brief 释放 L 和 U 因子的内存（使用正确的格式专属函数）
+     * @details 根据官方示例的清理模式：
+     * - L 使用 Destroy_SuperNode_SCP（SCP 超节点列存储格式）
+     * - U 使用 Destroy_CompCol_NCP（NCP 列置换压缩格式）
+     * 注意：不能用通用的 Destroy_SuperMatrix_Store，会导致 NCP 格式内存泄漏
+     */
+    void release_factors();
+
+    /**
+     * @brief 释放 AC 置换矩阵（若 pdgstrf_init 已创建）
+     * @details 调用 pxgstrf_finalize 或 pdgstrf_finalize 清理 AC 相关内部结构
+     */
+    void release_ac_matrix();
+};
+
+#endif  // EM_SOLVER_HAS_SUPERLU
+
 /**
  * @class DirectBackendManager
  * @brief 直接求解器后端可用性管理器
@@ -291,13 +491,7 @@ private:
     std::unique_ptr<Eigen::SimplicialLLT<Eigen::SparseMatrix<double>>> eigen_solver_;
 
 #if EM_SOLVER_HAS_SUPERLU
-    // SuperLU后端数据结构（指针延迟初始化）
-    std::unique_ptr<struct SuperMatrix> superlu_A_;      ///< SuperLU矩阵表示
-    std::unique_ptr<struct SuperMatrix> superlu_L_;      ///< SuperLU L因子
-    std::unique_ptr<struct SuperMatrix> superlu_U_;      ///< SuperLU U因子
-    std::unique_ptr<int[]> superlu_perm_c_;              ///< 列置换数组
-    std::unique_ptr<int[]> superlu_perm_r_;              ///< 行置换数组
-    bool superlu_initialized_ = false;                    ///< SuperLU是否已初始化
+    std::unique_ptr<SuperluContext> superlu_ctx_;  ///< SuperLU_MT RAII 封装（管理完整生命周期）
 #endif
 
 #if EM_SOLVER_HAS_MUMPS

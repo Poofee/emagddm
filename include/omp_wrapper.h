@@ -1,10 +1,15 @@
-// OpenMP轻量封装头文件
-// 提供低侵入的OpenMP宏封装，支持无感适配
+// OpenMP 轻量封装头文件
+// 提供低侵入的 OpenMP 宏封装，支持无感适配
 
 #ifndef FE_EM_OMP_WRAPPER_H
 #define FE_EM_OMP_WRAPPER_H
 
 #include "config.h"
+
+#if USE_OPENMP
+#include <omp.h>
+#endif
+
 #include <stdexcept>
 #include <string>
 
@@ -168,7 +173,7 @@ public:
 /**
  * @brief 线程局部存储宏
  */
-#define OMP_THREAD_LOCAL _Thread_local
+#define OMP_THREAD_LOCAL thread_local
 
 #else
 

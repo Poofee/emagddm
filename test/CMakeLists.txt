@@ -583,3 +583,141 @@ target_link_libraries(test_linear_solver_scalar
 )
 
 add_test(NAME test_linear_solver_scalar COMMAND test_linear_solver_scalar)
+
+# ==================== SuperLU_MT 集成测试 ====================
+# 验证 SuperLU_MT 多线程稀疏LU求解器在项目中的正确集成
+# 包括：后端可用性检测、SPD矩阵求解、多次solve一致性、与Eigen交叉验证等
+add_executable(test_superlu_mt_integration
+    test_superlu_mt_integration.cpp
+)
+
+target_include_directories(test_superlu_mt_integration
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/numeric
+        ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+        ${CMAKE_SOURCE_DIR}/lib/eigen
+)
+
+target_link_libraries(test_superlu_mt_integration
+    PRIVATE
+        numeric_lib
+        tool_lib
+        spdlog_lib
+        GTest::gtest
+        GTest::gtest_main
+)
+
+# 若SuperLU_MT可用，链接对应库并启用SuperLU后端
+if(SUPERLU_MT_AVAILABLE AND TARGET ${SUPERLU_MT_TARGET})
+    target_link_libraries(test_superlu_mt_integration PRIVATE ${SUPERLU_MT_TARGET})
+    target_compile_definitions(test_superlu_mt_integration PRIVATE HAVE_SUPERLU)
+endif()
+
+add_test(NAME test_superlu_mt_integration COMMAND test_superlu_mt_integration)
+
+# ==================== SuperLU_MT 诊断测试（用于定位崩溃）====================
+add_executable(test_superlu_diagnostic
+    test_superlu_diagnostic.cpp
+)
+
+target_include_directories(test_superlu_diagnostic
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/numeric
+        ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+        ${CMAKE_SOURCE_DIR}/lib/eigen
+)
+
+target_link_libraries(test_superlu_diagnostic
+    PRIVATE
+        numeric_lib
+        tool_lib
+        spdlog_lib
+        GTest::gtest
+        GTest::gtest_main
+)
+
+message(STATUS "  [TEST-CFG] SUPERLU_MT_AVAILABLE=${SUPERLU_MT_AVAILABLE}")
+message(STATUS "  [TEST-CFG] SUPERLU_MT_TARGET=${SUPERLU_MT_TARGET}")
+if(SUPERLU_MT_AVAILABLE AND TARGET ${SUPERLU_MT_TARGET})
+    message(STATUS "  [TEST-CFG] -> Enabling HAVE_SUPERLU for test_superlu_diagnostic")
+    target_link_libraries(test_superlu_diagnostic PRIVATE ${SUPERLU_MT_TARGET})
+    target_compile_definitions(test_superlu_diagnostic PRIVATE HAVE_SUPERLU)
+else()
+    message(STATUS "  [TEST-CFG] -> SuperLU NOT available for test_superlu_diagnostic")
+endif()
+
+add_test(NAME test_superlu_diagnostic COMMAND test_superlu_diagnostic)
+
+# ==================== SuperLU_MT 全面功能与性能测试 ====================
+add_executable(test_superlu_comprehensive
+    test_superlu_comprehensive.cpp
+)
+
+target_include_directories(test_superlu_comprehensive
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/numeric
+        ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+        ${CMAKE_SOURCE_DIR}/lib/eigen
+)
+
+target_link_libraries(test_superlu_comprehensive
+    PRIVATE
+        numeric_lib
+        tool_lib
+        spdlog_lib
+        GTest::gtest
+        GTest::gtest_main
+)
+
+message(STATUS "  [TEST-CFG] Configuring test_superlu_comprehensive...")
+if(SUPERLU_MT_AVAILABLE AND TARGET ${SUPERLU_MT_TARGET})
+    message(STATUS "  [TEST-CFG] -> Enabling HAVE_SUPERLU for test_superlu_comprehensive")
+    target_link_libraries(test_superlu_comprehensive PRIVATE ${SUPERLU_MT_TARGET})
+    target_compile_definitions(test_superlu_comprehensive PRIVATE HAVE_SUPERLU)
+else()
+    message(STATUS "  [TEST-CFG] -> SuperLU NOT available for test_superlu_comprehensive")
+endif()
+
+add_test(NAME test_superlu_comprehensive COMMAND test_superlu_comprehensive)
+
+# ==================== SuperluContext RAII 封装全面测试 ====================
+# 覆盖 SuperluContext 类的所有公开接口：构造/析构、initialize、factorize、solve、
+# reset、移动语义、状态机转换、内存安全、不同规模矩阵
+add_executable(test_superlu_context
+    test_superlu_context.cpp
+)
+
+target_include_directories(test_superlu_context
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/numeric
+        ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+        ${CMAKE_SOURCE_DIR}/lib/eigen
+)
+
+target_link_libraries(test_superlu_context
+    PRIVATE
+        numeric_lib
+        tool_lib
+        spdlog_lib
+        GTest::gtest
+        GTest::gtest_main
+)
+
+message(STATUS "  [TEST-CFG] Configuring test_superlu_context...")
+if(SUPERLU_MT_AVAILABLE AND TARGET ${SUPERLU_MT_TARGET})
+    message(STATUS "  [TEST-CFG] -> Enabling HAVE_SUPERLU for test_superlu_context")
+    target_link_libraries(test_superlu_context PRIVATE ${SUPERLU_MT_TARGET})
+    target_compile_definitions(test_superlu_context PRIVATE HAVE_SUPERLU)
+else()
+    message(STATUS "  [TEST-CFG] -> SuperLU NOT available for test_superlu_context")
+endif()
+
+add_test(NAME test_superlu_context COMMAND test_superlu_context)

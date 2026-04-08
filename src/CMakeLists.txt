@@ -80,6 +80,13 @@ target_link_libraries(numeric_lib
         tool_lib
 )
 
+# 链接 SuperLU_MT 库（若可用）
+if(SUPERLU_MT_AVAILABLE AND TARGET ${SUPERLU_MT_TARGET})
+    target_link_libraries(numeric_lib PRIVATE ${SUPERLU_MT_TARGET})
+    target_compile_definitions(numeric_lib PRIVATE HAVE_SUPERLU)
+    message(STATUS "  numeric_lib: linked with ${SUPERLU_MT_TARGET} (HAVE_SUPERLU defined)")
+endif()
+
 if(USE_MPI)
     target_link_libraries(numeric_lib PRIVATE ${MPI_CXX_LIBRARIES})
 endif()
