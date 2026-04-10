@@ -730,6 +730,41 @@ public:
     SolverResult solve(const Eigen::VectorXd& b) override;
 
     /**
+     * @brief 设置复数系数矩阵并触发Cholesky分解（复数版本）
+     * @param A CSR格式复数稀疏系数矩阵（必须为方阵且Hermitian正定）
+     *
+     * @details 执行完整的前置处理和分解流程：
+     * 1. 输入合法性校验（维度、方阵检查）
+     * 2. CSR → Eigen格式转换（通过SparseConverter工具类的复数版本）
+     * 3. 调用Eigen::SimplicialLLT复数分解接口（符号分析 + 数值分解）
+     * 4. 缓存分解结果用于后续多次solve()复用
+     * 5. 记录分解耗时和统计信息到日志
+     *
+     * @pre A必须是已构建完成的CSR复数矩阵（is_built() == true）
+     * @post 内部缓存复数L因子，matrix_set_complex_标志置为true
+     * @note 此方法是瞬态优化的核心：一次分解，多次求解复用
+     * @exception 若矩阵非法或分解失败，设置内部错误状态并记录ERROR日志
+     */
+    void set_matrix(const CsrMatrix<std::complex<double>>& A) override;
+
+    /**
+     * @brief 求解复数线性系统 Ax = b（复数版本）
+     * @param b 复数右端项向量（载荷向量），维度必须与矩阵行数一致
+     * @return SolverResult 求解结果结构体（复数解存储在x_complex字段）
+     *
+     * @details 利用缓存的Cholesky分解因子执行高效求解：
+     * 1. 输入校验（复数矩阵已设置、维度匹配）
+     * 2. 调用Eigen::SimplicialLLT复数求解接口（前代 Ly = b + 回代 L^H x = y）
+     * 3. 计算残差范数 ||Ax - b||_2 用于质量评估
+     * 4. 记录求解耗时和性能指标
+     *
+     * @pre 必须先成功调用set_matrix(const CsrMatrix<std::complex<double>>&)
+     * @post 返回的result.x_complex仅在status == SUCCESS时有效
+     * @note 时间复杂度O(n²)（远低于重新分解的O(n³)）
+     */
+    SolverResult solve(const Eigen::VectorXcd& b) override;
+
+    /**
      * @brief 获取求解器名称标识（实现基类纯虚函数）
      * @return std::string 格式："SymmetricDirect_[后端名]"（如"SymmetricDirect_Eigen"）
      */
@@ -756,8 +791,15 @@ private:
 
     Eigen::SparseMatrix<double> eigen_matrix_;  ///< 缓存的Eigen格式系数矩阵
 
+    // ========== 复数版本内部状态 ==========
+    Eigen::SparseMatrix<std::complex<double>> eigen_matrix_complex_;  ///< 缓存的复数Eigen格式系数矩阵
+    bool matrix_set_complex_ = false;  ///< 复数矩阵是否已设置并成功分解
+
     // Eigen后端实例（SimplicialLLT: 稀疏Cholesky分解 LL^T）
     std::unique_ptr<Eigen::SimplicialLLT<Eigen::SparseMatrix<double>>> eigen_solver_;
+
+    // 复数 Eigen 后端实例（SimplicialLLT: 稀疏复数Cholesky分解 LL^H）
+    std::unique_ptr<Eigen::SimplicialLLT<Eigen::SparseMatrix<std::complex<double>>>> eigen_solver_complex_;
 
 #if EM_SOLVER_HAS_SUPERLU
     std::unique_ptr<SuperluContext> superlu_ctx_;  ///< SuperLU_MT RAII 封装（管理完整生命周期）
@@ -791,6 +833,24 @@ private:
      * @return SolverResult 求解结果
      */
     SolverResult solve_with_eigen(const Eigen::VectorXd& b);
+
+    /**
+     * @brief 使用Eigen后端执行复数Cholesky分解（复数版本）
+     * @return SolverResult 分解结果（SUCCESS或NUMERICAL_ERROR）
+     *
+     * @details 使用Eigen::SimplicialLLT复数版本执行Hermitian正定矩阵的Cholesky分解，
+     *          分解结果缓存到eigen_solver_complex_中供后续solve()调用。
+     */
+    SolverResult decompose_with_eigen_complex();
+
+    /**
+     * @brief 使用Eigen后端执行复数求解（复数版本）
+     * @param b 复数右端项向量
+     * @return SolverResult 求解结果（复数解存储在x_complex字段）
+     *
+     * @details 利用缓存的复数L因子执行前代 Ly = b 和回代 L^H x = y。
+     */
+    SolverResult solve_with_eigen_complex(const Eigen::VectorXcd& b);
 
 #if EM_SOLVER_HAS_SUPERLU
     /**
@@ -926,6 +986,35 @@ public:
      */
     SolverResult solve(const Eigen::VectorXd& b) override;
 
+    /**
+     * @brief 设置复数系数矩阵并触发LDL^T分解（复数版本）
+     * @param A CSR格式复数稀疏系数矩阵（必须为方阵且Hermitian）
+     *
+     * @details 执行流程：
+     * 1. 维度和方阵校验
+     * 2. CSR → Eigen格式转换（复数版本）
+     * 3. 调用Eigen::SimplicialLDLT复数分解接口执行LDL^H分解
+     * 4. 缓存分解结果用于后续多次solve()复用
+     *
+     * @pre A必须是已构建完成的CSR复数矩阵（is_built() == true）
+     * @post 内部缓存复数LDL^H因子，matrix_set_complex_标志置为true
+     */
+    void set_matrix(const CsrMatrix<std::complex<double>>& A) override;
+
+    /**
+     * @brief 求解复数线性系统 Ax = b（复数版本）
+     * @param b 复数右端项向量
+     * @return SolverResult 求解结果（复数解存储在x_complex字段）
+     *
+     * @details 利用缓存的LDL^H分解因子执行高效求解：
+     * 1. 输入校验（复数矩阵已设置、维度匹配）
+     * 2. 调用Eigen::SimplicialLDLT复数求解接口
+     * 3. 计算残差范数用于质量评估
+     *
+     * @pre 必须先成功调用set_matrix(const CsrMatrix<std::complex<double>>&)
+     */
+    SolverResult solve(const Eigen::VectorXcd& b) override;
+
     std::string get_solver_name() const override;
     void clear() override;
 
@@ -939,13 +1028,38 @@ private:
     Eigen::SparseMatrix<double> eigen_matrix_;
     Eigen::SparseMatrix<double> regularized_matrix_;  ///< 正则化后的矩阵备份
 
+    // ========== 复数版本内部状态 ==========
+    Eigen::SparseMatrix<std::complex<double>> eigen_matrix_complex_;  ///< 缓存的复数Eigen格式系数矩阵
+    bool matrix_set_complex_ = false;  ///< 复数矩阵是否已设置并成功分解
+
     // Eigen LDL^T求解器（支持2x2 pivot，处理不定矩阵）
     std::unique_ptr<Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>>> eigen_solver_;
+
+    // 复数 Eigen LDL^H求解器（支持2x2 pivot，处理复数不定矩阵）
+    std::unique_ptr<Eigen::SimplicialLDLT<Eigen::SparseMatrix<std::complex<double>>>> eigen_solver_complex_;
 
     DirectBackendType fallback_to_eigen_if_unavailable(DirectBackendType requested);
     SolverResult decompose_with_eigen();
     SolverResult solve_with_eigen(const Eigen::VectorXd& b);
     bool check_symmetry(const Eigen::SparseMatrix<double>& mat, double tol) const;
+
+    /**
+     * @brief 使用Eigen后端执行复数LDL^H分解（复数版本）
+     * @return SolverResult 分解结果（SUCCESS或NUMERICAL_ERROR）
+     *
+     * @details 使用Eigen::SimplicialLDLT复数版本执行Hermitian矩阵的LDL^H分解，
+     *          分解结果缓存到eigen_solver_complex_中供后续solve()调用。
+     */
+    SolverResult decompose_with_eigen_complex();
+
+    /**
+     * @brief 使用Eigen后端执行复数求解（复数版本）
+     * @param b 复数右端项向量
+     * @return SolverResult 求解结果（复数解存储在x_complex字段）
+     *
+     * @details 利用缓存的复数LDL^H因子执行前代和回代。
+     */
+    SolverResult solve_with_eigen_complex(const Eigen::VectorXcd& b);
 };
 
 /**
@@ -1040,6 +1154,35 @@ public:
      */
     SolverResult solve(const Eigen::VectorXd& b) override;
 
+    /**
+     * @brief 设置复数系数矩阵并触发LU分解（复数版本）
+     * @param A CSR格式复数稀疏系数矩阵（必须为方阵）
+     *
+     * @details 执行流程：
+     * 1. 方阵维度校验（不要求对称）
+     * 2. CSR → Eigen格式转换（复数版本）
+     * 3. 执行带选主元的LU分解 PA = LU（复数版本）
+     * 4. 缓存P、L、U因子用于后续求解
+     *
+     * @pre A必须是已构建完成的CSR复数矩阵（is_built() == true）
+     * @post 内部缓存复数LU因子，matrix_set_complex_标志置为true
+     */
+    void set_matrix(const CsrMatrix<std::complex<double>>& A) override;
+
+    /**
+     * @brief 求解复数线性系统 Ax = b（复数版本）
+     * @param b 复数右端项向量
+     * @return SolverResult 求解结果（复数解存储在x_complex字段）
+     *
+     * @details 利用缓存的LU分解因子执行高效求解：
+     * 1. 输入校验（复数矩阵已设置、维度匹配）
+     * 2. 调用Eigen::SparseLU复数求解接口
+     * 3. 计算残差范数用于质量评估
+     *
+     * @pre 必须先成功调用set_matrix(const CsrMatrix<std::complex<double>>&)
+     */
+    SolverResult solve(const Eigen::VectorXcd& b) override;
+
     std::string get_solver_name() const override;
     void clear() override;
 
@@ -1050,12 +1193,37 @@ private:
 
     Eigen::SparseMatrix<double> eigen_matrix_;
 
+    // ========== 复数版本内部状态 ==========
+    Eigen::SparseMatrix<std::complex<double>> eigen_matrix_complex_;  ///< 缓存的复数Eigen格式系数矩阵
+    bool matrix_set_complex_ = false;  ///< 复数矩阵是否已设置并成功分解
+
     // Eigen LU求解器（带部分选主元）
     std::unique_ptr<Eigen::SparseLU<Eigen::SparseMatrix<double>>> eigen_solver_;
+
+    // 复数 Eigen LU求解器（带部分选主元）
+    std::unique_ptr<Eigen::SparseLU<Eigen::SparseMatrix<std::complex<double>>>> eigen_solver_complex_;
 
     DirectBackendType fallback_to_eigen_if_unavailable(DirectBackendType requested);
     SolverResult decompose_with_eigen();
     SolverResult solve_with_eigen(const Eigen::VectorXd& b);
+
+    /**
+     * @brief 使用Eigen后端执行复数LU分解（复数版本）
+     * @return SolverResult 分解结果（SUCCESS或NUMERICAL_ERROR）
+     *
+     * @details 使用Eigen::SparseLU复数版本执行带选主元的LU分解，
+     *          分解结果缓存到eigen_solver_complex_中供后续solve()调用。
+     */
+    SolverResult decompose_with_eigen_complex();
+
+    /**
+     * @brief 使用Eigen后端执行复数求解（复数版本）
+     * @param b 复数右端项向量
+     * @return SolverResult 求解结果（复数解存储在x_complex字段）
+     *
+     * @details 利用缓存的复数P、L、U因子执行前代和回代。
+     */
+    SolverResult solve_with_eigen_complex(const Eigen::VectorXcd& b);
 
     /**
      * @brief 估算矩阵条件数（基于LU分解的U因子）

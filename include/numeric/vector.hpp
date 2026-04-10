@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <cmath>
 #include <algorithm>
+#include <Eigen/Dense>
 
 namespace emag {
 
@@ -263,6 +264,26 @@ public:
         std::cout << std::endl;
     }
 
+    /**
+     * @brief 获取实数 Eigen 向量
+     * @details 将当前向量的数据复制到 Eigen::VectorXd 中并返回。
+     *          对于实数向量，直接进行数据拷贝。
+     *          此方法返回的是值拷贝，而非引用，因为 Eigen 向量的生命周期需要独立管理。
+     * @return Eigen::VectorXd 实数 Eigen 向量
+     * @throws std::runtime_error 如果调用复数类型的向量实例
+     */
+    Eigen::VectorXd get_eigen_real() const;
+
+    /**
+     * @brief 获取复数 Eigen 向量
+     * @details 将当前向量的数据复制到 Eigen::VectorXcd 中并返回。
+     *          对于复数向量，直接进行数据拷贝（包含实部和虚部）。
+     *          此方法返回的是值拷贝，而非引用，因为 Eigen 向量的生命周期需要独立管理。
+     * @return Eigen::VectorXcd 复数 Eigen 向量
+     * @throws std::runtime_error 如果调用实数类型的向量实例
+     */
+    Eigen::VectorXcd get_eigen_complex() const;
+
 private:
     int size_;              ///< 向量大小
     std::vector<T> data_;   ///< 向量数据
@@ -271,5 +292,40 @@ private:
 // 常用类型别名
 using VectorReal = Vector<double>;
 using VectorComplex = Vector<std::complex<double>>;
+
+/**
+ * @brief 获取实数 Eigen 向量的实现
+ * @details 模板特化实现，将当前向量数据拷贝到 Eigen::VectorXd。
+ *          使用 Eigen::Map 进行高效的数据映射和拷贝，避免逐元素复制。
+ *          对于复数向量调用此方法会抛出异常以保证类型安全。
+ * @tparam T 向量数据类型
+ * @return Eigen::VectorXd 包含当前向量数据的实数 Eigen 向量（值拷贝）
+ * @throws std::runtime_error 当 T 不是 double 类型时抛出
+ */
+template<typename T>
+Eigen::VectorXd Vector<T>::get_eigen_real() const {
+    static_assert(std::is_same_v<T, double>, "get_eigen_real() 仅支持实数向量 (Vector<double>)");
+
+    // 使用 Eigen::Map 高效地将 std::vector 数据映射到 Eigen 向量
+    // 然后返回拷贝以避免生命周期问题
+    return Eigen::Map<const Eigen::VectorXd>(data_.data(), size_);
+}
+
+/**
+ * @brief 获取复数 Eigen 向量的实现
+ * @details 模板特化实现，将当前向量数据拷贝到 Eigen::VectorXcd。
+ *          使用 Eigen::Map 进行高效的数据映射和拷贝，支持完整的复数数据（实部+虚部）。
+ *          对于实数向量调用此方法会抛出异常以保证类型安全。
+ * @tparam T 向量数据类型
+ * @return Eigen::VectorXcd 包含当前向量数据的复数 Eigen 向量（值拷贝）
+ * @throws std::runtime_error 当 T 不是 std::complex<double> 类型时抛出
+ */
+template<typename T>
+Eigen::VectorXcd Vector<T>::get_eigen_complex() const {
+    static_assert(std::is_same_v<T, std::complex<double>>, "get_eigen_complex() 仅支持复数向量 (Vector<std::complex<double>>)");
+
+    // 使用 Eigen::Map 高效地映射复数数据并返回拷贝
+    return Eigen::Map<const Eigen::VectorXcd>(data_.data(), size_);
+}
 
 } // namespace emag

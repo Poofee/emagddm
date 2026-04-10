@@ -11,6 +11,7 @@
 #include "sparse_base.hpp"
 #include <vector>
 #include <complex>
+#include <stdexcept>
 
 namespace numeric {
 
@@ -138,12 +139,95 @@ public:
      */
     bool is_valid_index(int row, int col) const;
 
+    /**
+     * @brief 合并重复元素
+     * @details 合并相同 (row, col) 位置的元素，值累加
+     */
+    void merge_duplicates() override;
+
+    /**
+     * @brief 获取实数 Eigen 稀疏矩阵
+     * @return 实数 Eigen 稀疏矩阵的常量引用
+     * @note 如果矩阵为复数类型，将抛出异常
+     */
+    const Eigen::SparseMatrix<double>& get_eigen_real() const override;
+
+    /**
+     * @brief 获取复数 Eigen 稀疏矩阵
+     * @return 复数 Eigen 稀疏矩阵的常量引用
+     * @note 如果矩阵为实数类型，将抛出异常
+     */
+    const Eigen::SparseMatrix<std::complex<double>>& get_eigen_complex() const override;
+
 private:
     int rows_;                    ///< 矩阵行数
     int cols_;                    ///< 矩阵列数
     std::vector<int> row_indices_; ///< 行索引数组
     std::vector<int> col_indices_; ///< 列索引数组
     std::vector<T> values_;        ///< 数值数组
+    
+    // Eigen 矩阵缓存（mutable 允许在 const 方法中更新）
+    mutable Eigen::SparseMatrix<double> eigen_real_cache_;      ///< 实数 Eigen 矩阵缓存
+    mutable Eigen::SparseMatrix<std::complex<double>> eigen_complex_cache_; ///< 复数 Eigen 矩阵缓存
+    mutable bool eigen_real_dirty_ = true;      ///< 实数缓存是否需要更新
+    mutable bool eigen_complex_dirty_ = true;   ///< 复数缓存是否需要更新
+
+    /**
+     * @brief 更新实数 Eigen 缓存
+     * @details 将当前 COO 格式数据转换为 Eigen::SparseMatrix<double> 格式。
+     *          使用三元组格式 (Triplets) 构建稀疏矩阵。
+     */
+    void update_eigen_real_cache() const {
+        if constexpr (std::is_same_v<T, double>) {
+            // 创建三元组列表用于构建 Eigen 稀疏矩阵
+            using Triplet = Eigen::Triplet<double>;
+            std::vector<Triplet> triplets;
+            triplets.reserve(nnz());
+
+            // 填充三元组：(行, 列, 值)
+            for (int i = 0; i < nnz(); ++i) {
+                triplets.emplace_back(row_indices_[i], col_indices_[i], values_[i]);
+            }
+
+            // 构建 Eigen 稀疏矩阵
+            eigen_real_cache_.resize(rows_, cols_);
+            eigen_real_cache_.setFromTriplets(triplets.begin(), triplets.end());
+            eigen_real_cache_.makeCompressed();
+
+            // 标记缓存已更新
+            eigen_real_dirty_ = false;
+        } else {
+            throw std::runtime_error("update_eigen_real_cache 仅支持实数类型 (double)");
+        }
+    }
+
+    /**
+     * @brief 更新复数 Eigen 缓存
+     * @details 将当前 COO 格式数据转换为 Eigen::SparseMatrix<std::complex<double>> 格式。
+     */
+    void update_eigen_complex_cache() const {
+        if constexpr (std::is_same_v<T, std::complex<double>>) {
+            // 创建三元组列表用于构建 Eigen 复数稀疏矩阵
+            using Triplet = Eigen::Triplet<std::complex<double>>;
+            std::vector<Triplet> triplets;
+            triplets.reserve(nnz());
+
+            // 填充三元组：(行, 列, 复数值)
+            for (int i = 0; i < nnz(); ++i) {
+                triplets.emplace_back(row_indices_[i], col_indices_[i], values_[i]);
+            }
+
+            // 构建 Eigen 复数稀疏矩阵
+            eigen_complex_cache_.resize(rows_, cols_);
+            eigen_complex_cache_.setFromTriplets(triplets.begin(), triplets.end());
+            eigen_complex_cache_.makeCompressed();
+
+            // 标记缓存已更新
+            eigen_complex_dirty_ = false;
+        } else {
+            throw std::runtime_error("update_eigen_complex_cache 仅支持复数类型 (std::complex<double>)");
+        }
+    }
 };
 
 // 常用类型别名

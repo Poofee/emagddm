@@ -119,8 +119,144 @@ void CGSolver::clear() {
     matrix_set_ = false;
     history_.clear();
 
-    FEEM_DEBUG("CGSolver 资源已清理");
+    // 清理复数版本状态
+    eigen_matrix_complex_ = Eigen::SparseMatrix<std::complex<double>>();
+    matrix_set_complex_ = false;
+    eigen_solver_complex_.reset();
+
+    FEEM_DEBUG("CGSolver 资源已清理（含复数版本）");
 }
+
+/**
+ * @brief 设置复数系数矩阵并配置预条件子（CGSolver复数版本）
+ * @param A CSR格式复数稀疏系数矩阵
+ *
+ * @details 实现步骤：
+ * 1. 输入校验（矩阵非空、方阵）
+ * 2. 使用SparseConverter将CsrMatrix转换为Eigen格式
+ * 3. 创建Eigen ConjugateGradient求解器实例（带IncompleteCholesky预条件子）
+ * 4. 配置收敛容差和最大迭代次数
+ * 5. 执行compute()预计算预条件子
+ * 6. 设置matrix_set_complex_标志
+ */
+void CGSolver::set_matrix(const CsrMatrix<std::complex<double>>& A) {
+    auto start_time = std::chrono::high_resolution_clock::now();
+
+    // 输入校验
+    if (A.rows() == 0 || A.cols() == 0) {
+        FEEM_ERROR("CGSolver::set_matrix(复数) 错误: 矩阵为空");
+        return;
+    }
+
+    if (A.rows() != A.cols()) {
+        FEEM_ERROR("CGSolver::set_matrix(复数) 错误: 矩阵不是方阵, {}x{}", A.rows(), A.cols());
+        return;
+    }
+
+    // 转换为Eigen格式
+    eigen_matrix_complex_ = SparseConverter::to_eigen_complex(A);
+
+    // 创建或重置复数Eigen求解器实例
+    eigen_solver_complex_ = std::make_unique<
+        Eigen::ConjugateGradient<
+            Eigen::SparseMatrix<std::complex<double>>,
+            Eigen::Lower|Eigen::Upper,
+            Eigen::IncompleteCholesky<std::complex<double>>>>();
+
+    // 配置求解器参数
+    eigen_solver_complex_->setTolerance(config_.tolerance);
+    eigen_solver_complex_->setMaxIterations(config_.max_iterations);
+
+    // 预计算：分析矩阵并构建预条件子
+    eigen_solver_complex_->compute(eigen_matrix_complex_);
+
+    // 检查预计算是否成功
+    if (eigen_solver_complex_->info() != Eigen::Success) {
+        FEEM_ERROR("CGSolver::set_matrix(复数) 错误: Eigen ConjugateGradient compute()失败");
+        matrix_set_complex_ = false;
+        return;
+    }
+
+    matrix_set_complex_ = true;
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration<double, std::milli>(end_time - start_time);
+
+    FEEM_INFO("CGSolver::set_matrix(复数) 完成, 矩阵尺寸: {}x{}, 非零元数: {}, 耗时: {:.3f}ms",
+              A.rows(), A.cols(), A.nnz(), duration.count());
+}
+
+/**
+ * @brief 执行CG迭代求解复数线性系统（CGSolver复数版本）
+ * @param b 复数右端项向量
+ * @return SolverResult 求解结果，复数解存储在x_complex字段
+ *
+ * @details 求解流程：
+ * 1. 检查复数矩阵是否已设置（matrix_set_complex_）
+ * 2. 验证向量维度与矩阵匹配
+ * 3. 调用Eigen ConjugateGradient求解器的solve()方法
+ * 4. 提取解向量、迭代次数、误差估计值
+ * 5. 判断收敛状态并组装返回结果
+ */
+SolverResult CGSolver::solve(const Eigen::VectorXcd& b) {
+    SolverResult result;
+    auto start_time = std::chrono::high_resolution_clock::now();
+
+    // 输入校验：检查复数矩阵是否已设置
+    if (!matrix_set_complex_) {
+        result.status = SolverStatus::INVALID_INPUT;
+        result.error_msg = "复数矩阵未设置，请先调用set_matrix(CsrMatrix<complex>)";
+        FEEM_ERROR("CGSolver::solve(复数) 错误: {}", result.error_msg);
+        return result;
+    }
+
+    // 输入校验：维度匹配检查
+    if (b.size() != eigen_matrix_complex_.rows()) {
+        result.status = SolverStatus::INVALID_INPUT;
+        result.error_msg = "复数右端项向量维度与矩阵不匹配";
+        FEEM_ERROR("CGSolver::solve(复数) 错误: {}, 矩阵维度{}, 向量维度{}",
+                   result.error_msg, eigen_matrix_complex_.rows(), b.size());
+        return result;
+    }
+
+    // 执行Eigen ConjugateGradient求解
+    Eigen::VectorXcd x = eigen_solver_complex_->solve(b);
+
+    // 提取求解结果信息
+    result.x_complex = x;
+    result.iterations = eigen_solver_complex_->iterations();
+    result.residual_norm = eigen_solver_complex_->error();
+
+    // 判断收敛状态
+    if (eigen_solver_complex_->info() == Eigen::Success && result.residual_norm < config_.tolerance) {
+        result.status = SolverStatus::SUCCESS;
+    } else if (result.iterations >= config_.max_iterations) {
+        result.status = SolverStatus::MAX_ITER_REACHED;
+        result.error_msg = "达到最大迭代次数但未收敛";
+        FEEM_WARN("CGSolver::solve(复数): 达到最大迭代次数{}, 最终误差={:.6e}",
+                  config_.max_iterations, result.residual_norm);
+    } else {
+        result.status = SolverStatus::NUMERICAL_ERROR;
+        result.error_msg = "Eigen求解器报告数值错误";
+        FEEM_ERROR("CGSolver::solve(复数): 数值错误, error={:.6e}", result.residual_norm);
+    }
+
+    // 统计耗时
+    auto end_time = std::chrono::high_resolution_clock::now();
+    result.solve_time_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+
+    // 记录收敛历史（复数版本使用独立的history或可扩展）
+    if (result.iterations > 0) {
+        history_.record_iteration(result.iterations, result.residual_norm);
+    }
+
+    FEEM_INFO("CGSolver::solve(复数) 完成, 状态: {}, 迭代次数: {}, 误差: {:.6e}, 耗时: {:.3f}ms",
+              static_cast<int>(result.status), result.iterations,
+              result.residual_norm, result.solve_time_ms);
+
+    return result;
+}
+
 
 void CGSolver::setup_preconditioner() {
     switch (config_.preconditioner) {
@@ -508,8 +644,145 @@ void BiCGSTABSolver::clear() {
     matrix_set_ = false;
     history_.clear();
 
-    FEEM_DEBUG("BiCGSTABSolver 资源已清理");
+    // 清理复数版本状态
+    eigen_matrix_complex_ = Eigen::SparseMatrix<std::complex<double>>();
+    matrix_set_complex_ = false;
+    eigen_solver_complex_.reset();
+
+    FEEM_DEBUG("BiCGSTABSolver 资源已清理（含复数版本）");
 }
+
+/**
+ * @brief 设置复数系数矩阵并配置预条件子（BiCGSTABSolver复数版本）
+ * @param A CSR格式复数稀疏系数矩阵
+ *
+ * @details 实现步骤：
+ * 1. 输入校验（矩阵非空、方阵）
+ * 2. 使用SparseConverter将CsrMatrix转换为Eigen格式
+ * 3. 创建Eigen BiCGSTAB求解器实例（带IncompleteLUT预条件子）
+ * 4. 配置收敛容差和最大迭代次数
+ * 5. 执行compute()预计算预条件子
+ * 6. 设置matrix_set_complex_标志
+ */
+void BiCGSTABSolver::set_matrix(const CsrMatrix<std::complex<double>>& A) {
+    auto start_time = std::chrono::high_resolution_clock::now();
+
+    // 输入校验
+    if (A.rows() == 0 || A.cols() == 0) {
+        FEEM_ERROR("BiCGSTABSolver::set_matrix(复数) 错误: 矩阵为空");
+        return;
+    }
+
+    if (A.rows() != A.cols()) {
+        FEEM_ERROR("BiCGSTABSolver::set_matrix(复数) 错误: 矩阵不是方阵, {}x{}", A.rows(), A.cols());
+        return;
+    }
+
+    // 转换为Eigen格式
+    eigen_matrix_complex_ = SparseConverter::to_eigen_complex(A);
+
+    // 创建或重置复数Eigen求解器实例
+    eigen_solver_complex_ = std::make_unique<
+        Eigen::BiCGSTAB<
+            Eigen::SparseMatrix<std::complex<double>>,
+            Eigen::IncompleteLUT<std::complex<double>>>>();
+
+    // 配置求解器参数
+    eigen_solver_complex_->setTolerance(config_.tolerance);
+    eigen_solver_complex_->setMaxIterations(config_.max_iterations);
+
+    // 预计算：分析矩阵并构建预条件子
+    eigen_solver_complex_->compute(eigen_matrix_complex_);
+
+    // 检查预计算是否成功
+    if (eigen_solver_complex_->info() != Eigen::Success) {
+        FEEM_ERROR("BiCGSTABSolver::set_matrix(复数) 错误: Eigen BiCGSTAB compute()失败");
+        matrix_set_complex_ = false;
+        return;
+    }
+
+    matrix_set_complex_ = true;
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration<double, std::milli>(end_time - start_time);
+
+    FEEM_INFO("BiCGSTABSolver::set_matrix(复数) 完成, 矩阵尺寸: {}x{}, 非零元数: {}, 耗时: {:.3f}ms",
+              A.rows(), A.cols(), A.nnz(), duration.count());
+}
+
+/**
+ * @brief 执行BiCGSTAB迭代求解复数线性系统（BiCGSTABSolver复数版本）
+ * @param b 复数右端项向量
+ * @return SolverResult 求解结果，复数解存储在x_complex字段
+ *
+ * @details 求解流程：
+ * 1. 检查复数矩阵是否已设置（matrix_set_complex_）
+ * 2. 验证向量维度与矩阵匹配
+ * 3. 调用Eigen BiCGSTAB求解器的solve()方法
+ * 4. 提取解向量、迭代次数、误差估计值
+ * 5. 判断收敛状态并组装返回结果
+ *
+ * @note BiCGSTAB适用于非对称/非正定复数矩阵（如涡流场、谐波电磁场问题）
+ */
+SolverResult BiCGSTABSolver::solve(const Eigen::VectorXcd& b) {
+    SolverResult result;
+    auto start_time = std::chrono::high_resolution_clock::now();
+
+    // 输入校验：检查复数矩阵是否已设置
+    if (!matrix_set_complex_) {
+        result.status = SolverStatus::INVALID_INPUT;
+        result.error_msg = "复数矩阵未设置，请先调用set_matrix(CsrMatrix<complex>)";
+        FEEM_ERROR("BiCGSTABSolver::solve(复数) 错误: {}", result.error_msg);
+        return result;
+    }
+
+    // 输入校验：维度匹配检查
+    if (b.size() != eigen_matrix_complex_.rows()) {
+        result.status = SolverStatus::INVALID_INPUT;
+        result.error_msg = "复数右端项向量维度与矩阵不匹配";
+        FEEM_ERROR("BiCGSTABSolver::solve(复数) 错误: {}, 矩阵维度{}, 向量维度{}",
+                   result.error_msg, eigen_matrix_complex_.rows(), b.size());
+        return result;
+    }
+
+    // 执行Eigen BiCGSTAB求解
+    Eigen::VectorXcd x = eigen_solver_complex_->solve(b);
+
+    // 提取求解结果信息
+    result.x_complex = x;
+    result.iterations = eigen_solver_complex_->iterations();
+    result.residual_norm = eigen_solver_complex_->error();
+
+    // 判断收敛状态
+    if (eigen_solver_complex_->info() == Eigen::Success && result.residual_norm < config_.tolerance) {
+        result.status = SolverStatus::SUCCESS;
+    } else if (result.iterations >= config_.max_iterations) {
+        result.status = SolverStatus::MAX_ITER_REACHED;
+        result.error_msg = "达到最大迭代次数但未收敛";
+        FEEM_WARN("BiCGSTABSolver::solve(复数): 达到最大迭代次数{}, 最终误差={:.6e}",
+                  config_.max_iterations, result.residual_norm);
+    } else {
+        result.status = SolverStatus::NUMERICAL_ERROR;
+        result.error_msg = "Eigen求解器报告数值错误";
+        FEEM_ERROR("BiCGSTABSolver::solve(复数): 数值错误, error={:.6e}", result.residual_norm);
+    }
+
+    // 统计耗时
+    auto end_time = std::chrono::high_resolution_clock::now();
+    result.solve_time_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+
+    // 记录收敛历史（复数版本使用独立的history或可扩展）
+    if (result.iterations > 0) {
+        history_.record_iteration(result.iterations, result.residual_norm);
+    }
+
+    FEEM_INFO("BiCGSTABSolver::solve(复数) 完成, 状态: {}, 迭代次数: {}, 误差: {:.6e}, 耗时: {:.3f}ms",
+              static_cast<int>(result.status), result.iterations,
+              result.residual_norm, result.solve_time_ms);
+
+    return result;
+}
+
 
 void BiCGSTABSolver::setup_preconditioner() {
     switch (config_.preconditioner) {

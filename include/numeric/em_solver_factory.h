@@ -82,10 +82,40 @@ namespace numeric {
 
 /**
  * @class EMSolverFactory
- * @brief 电磁场线性求解器工厂类
+ * @brief 电磁场线性系统求解器工厂类
  * @details 采用静态工厂模式，提供统一的求解器创建接口。
  *          所有方法均为静态方法，禁止实例化。
  *          通过智能指针（unique_ptr）管理求解器生命周期，确保无内存泄漏。
+ *
+ * 本工厂类负责创建和管理各种类型的线性系统求解器实例。
+ * 支持的求解器类型包括：
+ * - 直接求解器：对称正定(LLT)、对称不定(LDLT)、通用非对称(LU)
+ * - 迭代求解器：共轭梯度(CG)、稳定双共轭梯度(BiCGSTAB)、代数多重网格(AMG)
+ * - 外部求解器：MUMPS、SuperLU
+ *
+ * **实数/复数统一架构支持：**
+ * 工厂创建的所有求解器实例均同时支持实数矩阵和复数矩阵求解。
+ * - 实数场景：使用 set_matrix(CsrMatrix<double>&) 和 solve(Eigen::VectorXd&)
+ * - 复数场景：使用 set_matrix(CsrMatrix<std::complex<double>>&) 和 solve(Eigen::VectorXcd&)
+ * - 两种模式可独立使用，互不干扰
+ *
+ * 使用示例：
+ * @code
+ * // 创建求解器实例
+ * auto solver = EMSolverFactory::create(SolverType::SYMMETRIC_DIRECT);
+ *
+ * // 实数场景使用
+ * CsrMatrix<double> K_real = ...;
+ * Eigen::VectorXd F_real = ...;
+ * solver->set_matrix(K_real);
+ * auto result_real = solver->solve(F_real);
+ *
+ * // 复数场景使用（同一求解器实例）
+ * CsrMatrix<std::complex<double>> K_complex = ...;
+ * Eigen::VectorXcd F_complex = ...;
+ * solver->set_matrix(K_complex);  // 自动切换到复数模式
+ * auto result_complex = solver->solve(F_complex);
+ * @endcode
  *
  * @note 线程安全：此类的所有方法都是线程安全的（无共享状态）
  * @note 内存安全：返回的unique_ptr自动管理对象生命周期，无需手动delete
@@ -560,6 +590,53 @@ public:
         FEEM_DEBUG("  默认选择: GeneralDirectSolver (最通用的LU分解)");
         FEEM_DEBUG("  建议: 检查MatrixAttribute设置是否正确，或手动指定求解器类型");
         return create_solver(SolverType::GENERAL_DIRECT);
+    }
+
+    /**
+     * @brief 根据矩阵数据类型判断是否需要使用复数求解模式
+     * @param data_type 矩阵数据类型（REAL 或 COMPLEX）
+     * @return true 如果需要使用复数模式（data_type == COMPLEX），false 如果使用实数模式
+     *
+     * @details 此方法可用于上层代码根据问题类型自动选择正确的接口调用方式。
+     *          在电磁场仿真中，不同物理场景可能需要不同的数值表示：
+     *
+     * @par 典型应用场景：
+     * - **实数模式（MatrixDataType::REAL）**：
+     *   静电场、静磁场等静态/准静态问题
+     *   系统矩阵为实对称或实非对称
+     *
+     * - **复数模式（MatrixDataType::COMPLEX）**：
+     *   时谐涡流场、波导问题、高频电磁仿真
+     *   系统矩阵包含虚部（由 jωσ 或 k₀²ε 项引入）
+     *
+     * @par 使用示例：
+     * @code
+     * // 根据问题属性自动选择接口
+     * numeric::MatrixAttribute attr = ...;  // 从配置或分析获得
+     * bool use_complex = EMSolverFactory::is_complex_mode(attr.data_type);
+     *
+     * auto solver = EMSolverFactory::create_solver(SolverType::GENERAL_DIRECT);
+     *
+     * if (use_complex) {
+     *     // 复数求解路径
+     *     CsrMatrix<std::complex<double>> K_complex = build_complex_matrix();
+     *     Eigen::VectorXcd F_complex = build_complex_rhs();
+     *     solver->set_matrix(K_complex);
+     *     auto result = solver->solve(F_complex);
+     * } else {
+     *     // 实数求解路径
+     *     CsrMatrix<double> K_real = build_real_matrix();
+     *     Eigen::VectorXd F_real = build_real_rhs();
+     *     solver->set_matrix(K_real);
+     *     auto result = solver->solve(F_real);
+     * }
+     * @endcode
+     *
+     * @note 此方法是纯逻辑判断工具，不涉及任何计算或状态修改
+     * @note 可与 create_solver_for_attribute() 配合使用，实现完全自动化的求解流程
+     */
+    static bool is_complex_mode(MatrixDataType data_type) {
+        return data_type == MatrixDataType::COMPLEX;
     }
 
 private:

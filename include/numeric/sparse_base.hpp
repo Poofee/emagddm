@@ -11,6 +11,7 @@
 #include "matrix_attribute.hpp"
 #include <vector>
 #include <complex>
+#include <Eigen/Sparse>
 
 namespace numeric {
 
@@ -60,6 +61,24 @@ public:
      * @return 矩阵数据类型
      */
     virtual MatrixDataType get_data_type() const = 0;
+
+    /**
+     * @brief 合并重复元素
+     * @details 合并相同 (row, col) 位置的元素，值累加
+     */
+    virtual void merge_duplicates() = 0;
+
+    /**
+     * @brief 获取实数 Eigen 稀疏矩阵
+     * @return 实数 Eigen 稀疏矩阵的常量引用
+     */
+    virtual const Eigen::SparseMatrix<double>& get_eigen_real() const = 0;
+
+    /**
+     * @brief 获取复数 Eigen 稀疏矩阵
+     * @return 复数 Eigen 稀疏矩阵的常量引用
+     */
+    virtual const Eigen::SparseMatrix<std::complex<double>>& get_eigen_complex() const = 0;
 };
 
 } // namespace numeric

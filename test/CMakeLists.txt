@@ -789,3 +789,57 @@ else()
 endif()
 
 add_test(NAME test_complex_mumps_context COMMAND test_complex_mumps_context)
+
+# ==================== Eigen 扩展接口测试 ====================
+# 测试稀疏矩阵和向量的 Eigen 接口扩展：merge_duplicates, get_eigen_real, get_eigen_complex
+# 覆盖 CooMatrix、CsrMatrix、Vector 的实数/复数统一架构
+add_executable(test_eigen_extension
+    test_eigen_extension_simple.cpp
+)
+
+target_include_directories(test_eigen_extension
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/numeric
+        ${CMAKE_SOURCE_DIR}/lib/eigen
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+)
+
+target_link_libraries(test_eigen_extension
+    PRIVATE
+        numeric_lib
+        tool_lib
+        spdlog_lib
+)
+
+add_test(NAME test_eigen_extension COMMAND test_eigen_extension)
+
+# ==================== 实数/复数统一架构线性求解器完整功能验证 ====================
+# 验证所有扩展功能的正确性：
+# 1. 实数对称正定矩阵 SymmetricDirectSolver (LLT分解)
+# 2. 复数一般矩阵 GeneralDirectSolver (LU分解)
+# 3. 实数迭代求解器 CGSolver + BiCGSTABSolver
+# 4. 复数迭代求解器 CGSolver + BiCGSTABSolver
+# 5. 数据结构扩展接口 (merge_duplicates, get_eigen)
+add_executable(test_unified_solver
+    test_unified_solver.cpp
+)
+
+target_include_directories(test_unified_solver
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/numeric
+        ${CMAKE_SOURCE_DIR}/lib/eigen
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+)
+
+target_link_libraries(test_unified_solver
+    PRIVATE
+        numeric_lib
+        tool_lib
+        spdlog_lib
+        GTest::gtest
+        GTest::gtest_main
+)
+
+add_test(NAME test_unified_solver COMMAND test_unified_solver)

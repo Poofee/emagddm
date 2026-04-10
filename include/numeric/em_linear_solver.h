@@ -13,6 +13,7 @@
 
 #include "csr_matrix.hpp"
 #include <Eigen/Dense>
+#include <complex>
 #include <string>
 
 namespace numeric {
@@ -50,7 +51,8 @@ enum class DirectBackendType {
  * @details 封装求解器的完整输出信息，包括解向量、状态码、性能指标和错误信息
  */
 struct SolverResult {
-    Eigen::VectorXd x;      ///< 求解结果：未知量向量，维度与输入矩阵行数一致
+    Eigen::VectorXd x;      ///< 求解结果：未知量向量，维度与输入矩阵行数一致（实数场景使用）
+    Eigen::VectorXcd x_complex;  ///< 复数求解结果：时谐场电磁分析场景使用
     SolverStatus status;    ///< 求解状态：指示求解是否成功及失败原因
     int iterations = 0;     ///< 迭代次数：直接求解器为0，迭代求解器记录实际迭代轮数
     double residual_norm = 0.0; ///< 最终残差范数：||Ax - b||_2，用于评估解的质量
@@ -108,6 +110,32 @@ public:
     virtual void set_matrix(const CsrMatrix<double>& A) = 0;
 
     /**
+     * @brief 设置复数系数矩阵A（时谐场场景）
+     * @param A CSR格式复数稀疏系数矩阵，必须是方阵且已构建完成
+     *
+     * @details 此方法为时谐场电磁分析提供复数矩阵设置接口：
+     * - 支持复数稀疏矩阵的输入和内部表示
+     * - 对于直接求解器，触发复数矩阵分解（LU/QR等），分解结果被缓存
+     * - 对于迭代求解器，可能预计算复数预条件子或提取对角线元素
+     * - 后续多次solve()调用可复用缓存的分解结果
+     *
+     * @note 调用前确保矩阵A已正确构建（is_built() == true）
+     * @note 复数矩阵常用于频域电磁分析、涡流计算等时谐场问题
+     * @exception 若矩阵为空、非方阵或未构建，应设置status为INVALID_INPUT并记录错误日志
+     *
+     * @par 典型使用流程（频域分析）：
+     * @code
+     * // 频率扫描中，仅当频率变化导致矩阵变化时重新设置
+     * for (double freq : frequency_list) {
+     *     auto A_complex = build_complex_matrix(freq);
+     *     solver->set_matrix(A_complex);  // 触发复数矩阵分解
+     *     auto result = solver->solve(b_complex);
+     * }
+     * @endcode
+     */
+    virtual void set_matrix(const CsrMatrix<std::complex<double>>& A) = 0;
+
+    /**
      * @brief 求解线性系统 Ax = b
      * @param b 右端项向量（载荷向量），维度必须与矩阵行数一致
      * @return SolverResult 求解结果结构体，包含解向量和状态信息
@@ -129,6 +157,41 @@ public:
      * - 超过最大迭代：返回MAX_ITER_REACHED（返回当前最佳近似解）
      */
     virtual SolverResult solve(const Eigen::VectorXd& b) = 0;
+
+    /**
+     * @brief 求解复数线性系统 Ax = b（时谐场场景）
+     * @param b 复数右端项向量（载荷向量），维度必须与矩阵行数一致
+     * @return SolverResult 求解结果结构体，复数解存储在 x_complex 字段中
+     *
+     * @details 执行复数线性系统的实际求解操作：
+     * - 直接求解器：利用缓存的复数矩阵分解结果进行前代/回代
+     * - 迭代求解器：执行复数迭代算法直到收敛或达到最大迭代次数
+     * - 自动记录迭代次数、残差范数、求解耗时等性能指标
+     * - 求解结果通过返回值的 x_complex 字段访问
+     *
+     * @note 必须先调用set_matrix(const CsrMatrix<std::complex<double>>&)设置复数系数矩阵
+     * @note 返回的result.x_complex仅在status == SUCCESS时有效
+     * @note 线程安全：此方法不是线程安全的，多线程并发调用需要外部加锁
+     *
+     * @par 错误处理策略：
+     * - 复数矩阵未设置：返回INVALID_INPUT
+     * - 维度不匹配：返回INVALID_INPUT
+     * - 复数分解失败：返回NUMERICAL_ERROR
+     * - 迭代发散：返回DIVERGED
+     * - 超过最大迭代：返回MAX_ITER_REACHED（返回当前最佳近似解）
+     *
+     * @par 典型应用场景：
+     * @code
+     * // 时谐场电磁分析
+     * solver->set_matrix(A_complex);  // 设置复数刚度矩阵
+     * auto result = solver->solve(b_complex);  // 求解复数系统
+     * if (result.status == SolverStatus::SUCCESS) {
+     *     Eigen::VectorXcd E_field = result.x_complex;  // 获取复数电场解
+     *     // 后处理：提取幅值和相位
+     * }
+     * @endcode
+     */
+    virtual SolverResult solve(const Eigen::VectorXcd& b) = 0;
 
     /**
      * @brief 获取求解器名称标识

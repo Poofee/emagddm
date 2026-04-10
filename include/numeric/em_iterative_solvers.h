@@ -268,6 +268,41 @@ public:
     SolverResult solve(const Eigen::VectorXd& b) override;
 
     /**
+     * @brief 设置复数系数矩阵并配置预条件子（复数版本）
+     * @param A CSR格式复数稀疏系数矩阵（必须是对称正定的方阵）
+     *
+     * @details 内部执行：
+     * 1. 将CsrMatrix<std::complex<double>>转换为Eigen::SparseMatrix<std::complex<double>>
+     * 2. 创建或重置复数Eigen ConjugateGradient求解器实例
+     * 3. 配置预条件子（使用IncompleteCholesky预条件子，与实数版本一致）
+     * 4. 设置容差和最大迭代次数
+     * 5. 调用eigen_solver_complex_->compute()分析矩阵
+     *
+     * @note 此方法会触发预条件子的预计算，可能耗时较长
+     * @note 复数版本与实数版本维护独立的内部状态，可独立使用
+     */
+    void set_matrix(const CsrMatrix<std::complex<double>>& A) override;
+
+    /**
+     * @brief 执行CG迭代求解复数线性系统 Ax = b（复数版本）
+     * @param b 复数右端项向量
+     * @return SolverResult 求解结果（复数解存储在 x_complex 字段）
+     *
+     * @details 求解流程：
+     * 1. 输入校验（检查matrix_set_complex_标志和维度匹配）
+     * 2. 调用eigen_solver_complex_->solve(b)执行迭代求解
+     * 3. 将结果存储到result.x_complex
+     * 4. 记录迭代次数和误差信息
+     * 5. 判断收敛状态并返回完整结果
+     *
+     * @par 收敛判断：
+     * relative_residual = ||Ax - b||_2 / ||b||_2 < tolerance
+     *
+     * @note 必须先调用set_matrix(const CsrMatrix<std::complex<double>>&)设置复数矩阵
+     */
+    SolverResult solve(const Eigen::VectorXcd& b) override;
+
+    /**
      * @brief 获取求解器名称标识
      * @return std::string "CGSolver_[预条件子类型]"
      */
@@ -287,6 +322,16 @@ private:
 
     Eigen::VectorXd jacobi_diag_;                        ///< Jacobi预条件子对角线 D^{-1}
     Eigen::IncompleteLUT<double> ilu0_precond_;          ///< ILU(0)预条件子
+
+    // 复数版本内部状态
+    Eigen::SparseMatrix<std::complex<double>> eigen_matrix_complex_;  ///< 缓存的复数Eigen格式系数矩阵
+    bool matrix_set_complex_ = false;                    ///< 复数矩阵是否已设置
+
+    /// 复数Eigen ConjugateGradient求解器实例（使用IncompleteCholesky预条件子）
+    std::unique_ptr<Eigen::ConjugateGradient<
+        Eigen::SparseMatrix<std::complex<double>>,
+        Eigen::Lower|Eigen::Upper,
+        Eigen::IncompleteCholesky<std::complex<double>>>> eigen_solver_complex_;
 
     /**
      * @brief 设置预条件子（根据config_.preconditioner类型）
@@ -432,6 +477,42 @@ public:
     SolverResult solve(const Eigen::VectorXd& b) override;
 
     /**
+     * @brief 设置复数系数矩阵（复数版本）
+     * @param A CSR格式复数系数矩阵（可以是任意方阵，不要求对称）
+     *
+     * @details 内部执行：
+     * 1. 将CsrMatrix<std::complex<double>>转换为Eigen::SparseMatrix<std::complex<double>>
+     * 2. 创建或重置复数Eigen BiCGSTAB求解器实例
+     * 3. 配置预条件子（使用IncompleteLUT预条件子，与实数版本一致）
+     * 4. 设置容差和最大迭代次数
+     * 5. 调用eigen_solver_complex_->compute()分析矩阵
+     *
+     * @note 此方法会触发预条件子的预计算，可能耗时较长（特别是ILU0）
+     * @note 复数版本与实数版本维护独立的内部状态，可独立使用
+     */
+    void set_matrix(const CsrMatrix<std::complex<double>>& A) override;
+
+    /**
+     * @brief 执行BiCGSTAB迭代求解复数线性系统（复数版本）
+     * @param b 复数右端项向量
+     * @return SolverResult 求解结果（复数解存储在 x_complex 字段）
+     *
+     * @details 求解流程：
+     * 1. 输入校验（检查matrix_set_complex_标志和维度匹配）
+     * 2. 调用eigen_solver_complex_->solve(b)执行迭代求解
+     * 3. 将结果存储到result.x_complex
+     * 4. 记录迭代次数和误差信息
+     * 5. 判断收敛状态并返回完整结果
+     *
+     * @par 额外的发散检测机制：
+     * - 监控连续多次迭代的残差变化趋势
+     * - 如果残差持续快速增长（>1000倍），判定为发散并提前终止
+     *
+     * @note 必须先调用set_matrix(const CsrMatrix<std::complex<double>>&)设置复数矩阵
+     */
+    SolverResult solve(const Eigen::VectorXcd& b) override;
+
+    /**
      * @brief 获取求解器名称
      * @return std::string "BiCGSTABSolver_[预条件子类型]"
      */
@@ -450,6 +531,15 @@ private:
 
     Eigen::VectorXd jacobi_diag_;                          ///< Jacobi对角线
     Eigen::IncompleteLUT<double> ilu0_precond_;           ///< ILU0预条件子
+
+    // 复数版本内部状态
+    Eigen::SparseMatrix<std::complex<double>> eigen_matrix_complex_;  ///< 缓存的复数Eigen格式系数矩阵
+    bool matrix_set_complex_ = false;                      ///< 复数矩阵是否已设置
+
+    /// 复数Eigen BiCGSTAB求解器实例（使用IncompleteLUT预条件子）
+    std::unique_ptr<Eigen::BiCGSTAB<
+        Eigen::SparseMatrix<std::complex<double>>,
+        Eigen::IncompleteLUT<std::complex<double>>>> eigen_solver_complex_;
 
     void setup_preconditioner();
     SolverResult solve_no_preconditioner(const Eigen::VectorXd& b);

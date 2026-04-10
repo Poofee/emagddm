@@ -14,6 +14,7 @@
 #include <stdexcept>
 #include <iostream>
 #include <functional>
+#include <Eigen/Sparse>
 
 namespace numeric {
 
@@ -292,6 +293,67 @@ void CsrMatrix<T>::sort_coo_data(std::vector<int>& rows, std::vector<int>& cols,
     rows = std::move(sorted_rows);
     cols = std::move(sorted_cols);
     values = std::move(sorted_values);
+}
+
+/**
+ * @brief 合并 CSR 矩阵中的重复元素（空实现）
+ * @details CSR 格式在构建时（build_from_coo）已经通过排序和合并处理了重复元素，
+ *          因此 CSR 矩阵内部不会存在重复的 (row, col) 位置。此方法为保持接口一致性而提供，
+ *          实际执行时不做任何操作。
+ * @tparam T 矩阵元素数据类型
+ */
+template<typename T>
+void CsrMatrix<T>::merge_duplicates() {
+    // CSR 格式在构建时已自动合并重复元素，无需额外操作
+    // 此方法仅用于接口一致性，实际为空实现
+}
+
+/**
+ * @brief 获取实数 Eigen 稀疏矩阵的常量引用
+ * @details 返回当前 CSR 矩阵对应的 Eigen 实数稀疏矩阵。采用惰性求值策略，
+ *          仅在缓存失效或矩阵未构建时才重新构建。CSR 格式必须先通过 build_from_coo()
+ *          构建后才能调用此方法。
+ * @return const Eigen::SparseMatrix<double>& 实数 Eigen 稀疏矩阵的常量引用
+ * @throws std::runtime_error 如果矩阵未构建或调用复数类型的实例
+ * @tparam T 矩阵元素数据类型
+ */
+template<typename T>
+const Eigen::SparseMatrix<double>& CsrMatrix<T>::get_eigen_real() const {
+    // 类型安全检查
+    if constexpr (!std::is_same_v<T, double>) {
+        throw std::runtime_error("无法从复数 CSR 矩阵获取实数 Eigen 矩阵");
+    }
+
+    // 惰性求值
+    if (eigen_real_dirty_) {
+        update_eigen_real_cache();
+    }
+
+    return eigen_real_cache_;
+}
+
+/**
+ * @brief 获取复数 Eigen 稀疏矩阵的常量引用
+ * @details 返回当前 CSR 矩阵对应的 Eigen 复数稀疏矩阵。采用惰性求值策略，
+ *          仅在缓存失效或矩阵未构建时才重新构建。CSR 格式必须先通过 build_from_coo()
+ *          构建后才能调用此方法。
+ * @return const Eigen::SparseMatrix<std::complex<double>>& 复数 Eigen 稀疏矩阵的常量引用
+ * @throws std::runtime_error 如果矩阵未构建或调用实数类型的实例
+ * @tparam T 矩阵元素数据类型
+ */
+template<typename T>
+const Eigen::SparseMatrix<std::complex<double>>& CsrMatrix<T>::get_eigen_complex() const {
+    // 类型安全检查
+    if constexpr (!std::is_same_v<T, std::complex<double>>) {
+        throw std::runtime_error("无法从实数 CSR 矩阵获取复数 Eigen 矩阵");
+    }
+
+    // 惰性求值
+    if (eigen_complex_dirty_) {
+        update_eigen_complex_cache();
+    }
+
+    return eigen_complex_cache_;
 }
 
 } // namespace numeric

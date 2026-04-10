@@ -51,6 +51,15 @@ numeric::SolverResult create_error_result(numeric::SolverStatus status, const st
     return result;
 }
 
+// 匿名命名空间辅助函数：创建成功结果（复数版本）
+numeric::SolverResult create_success_result_complex(Eigen::VectorXcd x, int iterations = 0) {
+    numeric::SolverResult result;
+    result.x_complex = std::move(x);
+    result.status = numeric::SolverStatus::SUCCESS;
+    result.iterations = iterations;
+    return result;
+}
+
 } // anonymous namespace
 
 namespace numeric {
@@ -279,6 +288,92 @@ SolverResult SymmetricDirectSolver::solve(const Eigen::VectorXd& b) {
     return result;
 }
 
+void SymmetricDirectSolver::set_matrix(const CsrMatrix<std::complex<double>>& A) {
+    auto start_time = std::chrono::high_resolution_clock::now();
+
+    // 步骤1：输入合法性校验
+    if (A.rows() <= 0 || A.cols() <= 0) {
+        FEEM_ERROR("SymmetricDirectSolver::set_matrix(复数) - 矩阵维度非法: rows={}, cols={}",
+                   A.rows(), A.cols());
+        return;
+    }
+
+    if (A.rows() != A.cols()) {
+        FEEM_ERROR("SymmetricDirectSolver::set_matrix(复数) - 矩阵非方阵: {}x{}",
+                   A.rows(), A.cols());
+        return;
+    }
+
+    // 步骤2：CSR → Eigen格式转换（复数版本）
+    FEEM_DEBUG("SymmetricDirectSolver 开始转换 CSR -> Eigen 复数格式, 维度: {}x{}",
+               A.rows(), A.cols());
+
+    try {
+        eigen_matrix_complex_ = SparseConverter::to_eigen_complex(A);
+        eigen_matrix_complex_.makeCompressed();  // 压缩存储减少内存占用
+    } catch (const std::exception& e) {
+        FEEM_ERROR("SymmetricDirectSolver::set_matrix(复数) - 矩阵转换失败: {}", e.what());
+        return;
+    }
+
+    // 步骤3：执行复数Cholesky分解
+    SolverResult decompose_result = decompose_with_eigen_complex();
+
+    if (decompose_result.status != SolverStatus::SUCCESS) {
+        FEEM_ERROR("SymmetricDirectSolver::set_matrix(复数) - 分解失败: {}",
+                   decompose_result.error_msg);
+        return;
+    }
+
+    matrix_set_complex_ = true;
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    double duration_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+
+    FEEM_INFO("SymmetricDirectSolver::set_matrix(复数) 完成, 维度: {}x{}, 后端: Eigen, 耗时: {:.3f} ms",
+              eigen_matrix_complex_.rows(), eigen_matrix_complex_.cols(), duration_ms);
+}
+
+SolverResult SymmetricDirectSolver::solve(const Eigen::VectorXcd& b) {
+    auto start_time = std::chrono::high_resolution_clock::now();
+
+    // 输入校验：复数矩阵是否已设置
+    if (!matrix_set_complex_) {
+        FEEM_ERROR("SymmetricDirectSolver::solve(复数) - 复数矩阵未设置，请先调用 set_matrix(复数)");
+        return create_error_result(SolverStatus::INVALID_INPUT,
+                                   "复数矩阵未设置，请先调用 set_matrix(复数版本)");
+    }
+
+    // 输入校验：维度匹配
+    if (b.size() != eigen_matrix_complex_.rows()) {
+        FEEM_ERROR("SymmetricDirectSolver::solve(复数) - 维度不匹配: 矩阵{}, 向量{}",
+                   eigen_matrix_complex_.rows(), b.size());
+        return create_error_result(SolverStatus::INVALID_INPUT,
+                                   "右端项向量长度与复数矩阵维度不匹配");
+    }
+
+    // 执行复数求解
+    SolverResult result = solve_with_eigen_complex(b);
+
+    // 计算残差范数用于质量评估（仅在成功时计算）
+    if (result.status == SolverStatus::SUCCESS) {
+        Eigen::VectorXcd residual = eigen_matrix_complex_ * result.x_complex - b;
+        result.residual_norm = residual.norm();
+    }
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    result.solve_time_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+
+    if (result.status == SolverStatus::SUCCESS) {
+        FEEM_DEBUG("SymmetricDirectSolver::solve(复数) 成功, 残差: {:.6e}, 耗时: {:.3f} ms",
+                   result.residual_norm, result.solve_time_ms);
+    } else {
+        FEEM_ERROR("SymmetricDirectSolver::solve(复数) 失败: {}", result.error_msg);
+    }
+
+    return result;
+}
+
 std::string SymmetricDirectSolver::get_solver_name() const {
     return std::string("SymmetricDirect_") + DirectBackendManager::getBackendName(backend_type_);
 }
@@ -286,9 +381,14 @@ std::string SymmetricDirectSolver::get_solver_name() const {
 void SymmetricDirectSolver::clear() {
     FEEM_DEBUG("SymmetricDirectSolver::clear - 释放所有内部资源");
 
-    // 释放Eigen后端资源
+    // 释放Eigen后端资源（实数版本）
     eigen_solver_.reset();
     eigen_matrix_ = Eigen::SparseMatrix<double>();  // 释放矩阵内存
+
+    // 释放Eigen后端资源（复数版本）
+    eigen_solver_complex_.reset();
+    eigen_matrix_complex_ = Eigen::SparseMatrix<std::complex<double>>();  // 释放复数矩阵内存
+    matrix_set_complex_ = false;
 
 #if EM_SOLVER_HAS_SUPERLU
     // 释放 SuperLU_MT 资源（RAII 封装自动管理所有资源释放）
@@ -400,6 +500,61 @@ SolverResult SymmetricDirectSolver::solve_with_eigen(const Eigen::VectorXd& b) {
         FEEM_ERROR("SymmetricDirectSolver::solve_with_eigen - 异常: {}", e.what());
         return create_error_result(SolverStatus::NUMERICAL_ERROR,
                                    std::string("Eigen求解异常: ") + e.what());
+    }
+}
+
+SolverResult SymmetricDirectSolver::decompose_with_eigen_complex() {
+    FEEM_DEBUG("SymmetricDirectSolver::decompose_with_eigen_complex - 开始复数Cholesky分解");
+
+    try {
+        eigen_solver_complex_ = std::make_unique<Eigen::SimplicialLLT<Eigen::SparseMatrix<std::complex<double>>>>();
+
+        // 执行符号分析 + 数值分解（SimplicialLLT自动处理复数Hermitian正定矩阵）
+        eigen_solver_complex_->compute(eigen_matrix_complex_);
+
+        // 检查分解是否成功
+        if (eigen_solver_complex_->info() != Eigen::Success) {
+            std::string error_msg = "Eigen复数Cholesky分解失败";
+
+            if (eigen_matrix_complex_.rows() > 0) {
+                error_msg += "（矩阵可能非Hermitian正定或奇异）";
+            }
+
+            FEEM_ERROR("{}", error_msg);
+            return create_error_result(SolverStatus::NUMERICAL_ERROR, error_msg);
+        }
+
+        FEEM_DEBUG("SymmetricDirectSolver::decompose_with_eigen_complex - 复数Cholesky分解成功");
+        return create_success_result_complex(Eigen::VectorXcd());  // 空向量占位（分解无解向量）
+    } catch (const std::bad_alloc& e) {
+        FEEM_ERROR("SymmetricDirectSolver::decompose_with_eigen_complex - 内存分配失败: {}", e.what());
+        return create_error_result(SolverStatus::NUMERICAL_ERROR,
+                                   "内存不足，无法完成复数Cholesky分解");
+    } catch (const std::exception& e) {
+        FEEM_ERROR("SymmetricDirectSolver::decompose_with_eigen_complex - 异常: {}", e.what());
+        return create_error_result(SolverStatus::NUMERICAL_ERROR,
+                                   std::string("Eigen复数分解异常: ") + e.what());
+    }
+}
+
+SolverResult SymmetricDirectSolver::solve_with_eigen_complex(const Eigen::VectorXcd& b) {
+    FEEM_DEBUG("SymmetricDirectSolver::solve_with_eigen_complex - 开始复数前代/回代");
+
+    try {
+        // 利用缓存的L因子执行前代 Ly = b 和回代 L^H x = y
+        Eigen::VectorXcd x = eigen_solver_complex_->solve(b);
+
+        if (eigen_solver_complex_->info() != Eigen::Success) {
+            FEEM_ERROR("SymmetricDirectSolver::solve_with_eigen_complex - 复数求解失败");
+            return create_error_result(SolverStatus::NUMERICAL_ERROR,
+                                       "Eigen复数前代/回代失败");
+        }
+
+        return create_success_result_complex(std::move(x));
+    } catch (const std::exception& e) {
+        FEEM_ERROR("SymmetricDirectSolver::solve_with_eigen_complex - 异常: {}", e.what());
+        return create_error_result(SolverStatus::NUMERICAL_ERROR,
+                                   std::string("Eigen复数求解异常: ") + e.what());
     }
 }
 
@@ -533,6 +688,71 @@ SolverResult SymmetricIndefiniteDirectSolver::solve(const Eigen::VectorXd& b) {
     return result;
 }
 
+void SymmetricIndefiniteDirectSolver::set_matrix(const CsrMatrix<std::complex<double>>& A) {
+    auto start_time = std::chrono::high_resolution_clock::now();
+
+    // 输入校验
+    if (A.rows() <= 0 || A.cols() <= 0 || A.rows() != A.cols()) {
+        FEEM_ERROR("SymmetricIndefiniteDirectSolver::set_matrix(复数) - 矩阵维度非法: {}x{}",
+                   A.rows(), A.cols());
+        return;
+    }
+
+    // CSR → Eigen转换（复数版本）
+    try {
+        eigen_matrix_complex_ = SparseConverter::to_eigen_complex(A);
+        eigen_matrix_complex_.makeCompressed();
+    } catch (const std::exception& e) {
+        FEEM_ERROR("SymmetricIndefiniteDirectSolver::set_matrix(复数) - 转换失败: {}", e.what());
+        return;
+    }
+
+    // 执行复数LDL^H分解
+    SolverResult decompose_result = decompose_with_eigen_complex();
+
+    if (decompose_result.status != SolverStatus::SUCCESS) {
+        FEEM_ERROR("SymmetricIndefiniteDirectSolver::set_matrix(复数) - LDL^H分解失败: {}",
+                   decompose_result.error_msg);
+        return;
+    }
+
+    matrix_set_complex_ = true;
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    double duration_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+
+    FEEM_INFO("SymmetricIndefiniteDirectSolver::set_matrix(复数) 完成, 维度: {}x{}, 耗时: {:.3f} ms",
+              eigen_matrix_complex_.rows(), eigen_matrix_complex_.cols(), duration_ms);
+}
+
+SolverResult SymmetricIndefiniteDirectSolver::solve(const Eigen::VectorXcd& b) {
+    auto start_time = std::chrono::high_resolution_clock::now();
+
+    if (!matrix_set_complex_) {
+        FEEM_ERROR("SymmetricIndefiniteDirectSolver::solve(复数) - 复数矩阵未设置");
+        return create_error_result(SolverStatus::INVALID_INPUT,
+                                   "复数矩阵未设置，请先调用 set_matrix(复数版本)");
+    }
+
+    if (b.size() != eigen_matrix_complex_.rows()) {
+        FEEM_ERROR("SymmetricIndefiniteDirectSolver::solve(复数) - 维度不匹配");
+        return create_error_result(SolverStatus::INVALID_INPUT,
+                                   "右端项向量长度与复数矩阵维度不匹配");
+    }
+
+    SolverResult result = solve_with_eigen_complex(b);
+
+    if (result.status == SolverStatus::SUCCESS) {
+        Eigen::VectorXcd residual = eigen_matrix_complex_ * result.x_complex - b;
+        result.residual_norm = residual.norm();
+    }
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    result.solve_time_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+
+    return result;
+}
+
 std::string SymmetricIndefiniteDirectSolver::get_solver_name() const {
     return std::string("SymmetricIndefiniteDirect_") +
            DirectBackendManager::getBackendName(backend_type_);
@@ -541,9 +761,16 @@ std::string SymmetricIndefiniteDirectSolver::get_solver_name() const {
 void SymmetricIndefiniteDirectSolver::clear() {
     FEEM_DEBUG("SymmetricIndefiniteDirectSolver::clear - 释放资源");
 
+    // 释放实数版本资源
     eigen_solver_.reset();
     eigen_matrix_ = Eigen::SparseMatrix<double>();
     regularized_matrix_ = Eigen::SparseMatrix<double>();
+
+    // 释放复数版本资源
+    eigen_solver_complex_.reset();
+    eigen_matrix_complex_ = Eigen::SparseMatrix<std::complex<double>>();
+    matrix_set_complex_ = false;
+
     matrix_set_ = false;
     regularization_applied_ = false;
 }
@@ -620,6 +847,52 @@ SolverResult SymmetricIndefiniteDirectSolver::solve_with_eigen(const Eigen::Vect
         FEEM_ERROR("SymmetricIndefiniteDirectSolver::solve_with_eigen - 异常: {}", e.what());
         return create_error_result(SolverStatus::NUMERICAL_ERROR,
                                    std::string("求解异常: ") + e.what());
+    }
+}
+
+SolverResult SymmetricIndefiniteDirectSolver::decompose_with_eigen_complex() {
+    FEEM_DEBUG("SymmetricIndefiniteDirectSolver::decompose_with_eigen_complex - 开始复数LDL^H分解");
+
+    try {
+        eigen_solver_complex_ = std::make_unique<Eigen::SimplicialLDLT<Eigen::SparseMatrix<std::complex<double>>>>();
+
+        // SimplicialLDLT支持2x2 pivot旋转，可处理复数Hermitian不定矩阵
+        eigen_solver_complex_->compute(eigen_matrix_complex_);
+
+        if (eigen_solver_complex_->info() != Eigen::Success) {
+            FEEM_ERROR("SymmetricIndefiniteDirectSolver::decompose_with_eigen_complex - 复数LDL^H分解失败");
+            return create_error_result(SolverStatus::NUMERICAL_ERROR,
+                                       "复数LDL^H分解失败（矩阵可能奇异或强不定）");
+        }
+
+        FEEM_DEBUG("SymmetricIndefiniteDirectSolver::decompose_with_eigen_complex - 复数LDL^H分解成功");
+        return create_success_result_complex(Eigen::VectorXcd());
+    } catch (const std::bad_alloc& e) {
+        FEEM_ERROR("SymmetricIndefiniteDirectSolver::decompose_with_eigen_complex - 内存不足: {}", e.what());
+        return create_error_result(SolverStatus::NUMERICAL_ERROR, "内存分配失败");
+    } catch (const std::exception& e) {
+        FEEM_ERROR("SymmetricIndefiniteDirectSolver::decompose_with_eigen_complex - 异常: {}", e.what());
+        return create_error_result(SolverStatus::NUMERICAL_ERROR,
+                                   std::string("复数LDL^H异常: ") + e.what());
+    }
+}
+
+SolverResult SymmetricIndefiniteDirectSolver::solve_with_eigen_complex(const Eigen::VectorXcd& b) {
+    FEEM_DEBUG("SymmetricIndefiniteDirectSolver::solve_with_eigen_complex - 开始复数求解");
+
+    try {
+        Eigen::VectorXcd x = eigen_solver_complex_->solve(b);
+
+        if (eigen_solver_complex_->info() != Eigen::Success) {
+            FEEM_ERROR("SymmetricIndefiniteDirectSolver::solve_with_eigen_complex - 复数求解失败");
+            return create_error_result(SolverStatus::NUMERICAL_ERROR, "复数LDL^H求解失败");
+        }
+
+        return create_success_result_complex(std::move(x));
+    } catch (const std::exception& e) {
+        FEEM_ERROR("SymmetricIndefiniteDirectSolver::solve_with_eigen_complex - 异常: {}", e.what());
+        return create_error_result(SolverStatus::NUMERICAL_ERROR,
+                                   std::string("复数求解异常: ") + e.what());
     }
 }
 
@@ -728,6 +1001,77 @@ SolverResult GeneralDirectSolver::solve(const Eigen::VectorXd& b) {
     return result;
 }
 
+void GeneralDirectSolver::set_matrix(const CsrMatrix<std::complex<double>>& A) {
+    auto start_time = std::chrono::high_resolution_clock::now();
+
+    // 输入校验（仅要求方阵，不要求对称）
+    if (A.rows() <= 0 || A.cols() <= 0) {
+        FEEM_ERROR("GeneralDirectSolver::set_matrix(复数) - 矩阵维度非法: {}x{}",
+                   A.rows(), A.cols());
+        return;
+    }
+
+    if (A.rows() != A.cols()) {
+        FEEM_ERROR("GeneralDirectSolver::set_matrix(复数) - 矩阵非方阵: {}x{}",
+                   A.rows(), A.cols());
+        return;
+    }
+
+    // CSR → Eigen转换（复数版本）
+    try {
+        eigen_matrix_complex_ = SparseConverter::to_eigen_complex(A);
+        eigen_matrix_complex_.makeCompressed();
+    } catch (const std::exception& e) {
+        FEEM_ERROR("GeneralDirectSolver::set_matrix(复数) - 转换失败: {}", e.what());
+        return;
+    }
+
+    // 执行复数LU分解（带部分选主元）
+    SolverResult decompose_result = decompose_with_eigen_complex();
+
+    if (decompose_result.status != SolverStatus::SUCCESS) {
+        FEEM_ERROR("GeneralDirectSolver::set_matrix(复数) - LU分解失败: {}",
+                   decompose_result.error_msg);
+        return;
+    }
+
+    matrix_set_complex_ = true;
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    double duration_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+
+    FEEM_INFO("GeneralDirectSolver::set_matrix(复数) 完成, 维度: {}x{}, 耗时: {:.3f} ms",
+              eigen_matrix_complex_.rows(), eigen_matrix_complex_.cols(), duration_ms);
+}
+
+SolverResult GeneralDirectSolver::solve(const Eigen::VectorXcd& b) {
+    auto start_time = std::chrono::high_resolution_clock::now();
+
+    if (!matrix_set_complex_) {
+        FEEM_ERROR("GeneralDirectSolver::solve(复数) - 复数矩阵未设置");
+        return create_error_result(SolverStatus::INVALID_INPUT,
+                                   "复数矩阵未设置，请先调用 set_matrix(复数版本)");
+    }
+
+    if (b.size() != eigen_matrix_complex_.rows()) {
+        FEEM_ERROR("GeneralDirectSolver::solve(复数) - 维度不匹配");
+        return create_error_result(SolverStatus::INVALID_INPUT,
+                                   "右端项向量长度与复数矩阵维度不匹配");
+    }
+
+    SolverResult result = solve_with_eigen_complex(b);
+
+    if (result.status == SolverStatus::SUCCESS) {
+        Eigen::VectorXcd residual = eigen_matrix_complex_ * result.x_complex - b;
+        result.residual_norm = residual.norm();
+    }
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    result.solve_time_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+
+    return result;
+}
+
 std::string GeneralDirectSolver::get_solver_name() const {
     return std::string("GeneralDirect_") + DirectBackendManager::getBackendName(backend_type_);
 }
@@ -735,8 +1079,15 @@ std::string GeneralDirectSolver::get_solver_name() const {
 void GeneralDirectSolver::clear() {
     FEEM_DEBUG("GeneralDirectSolver::clear - 释放资源");
 
+    // 释放实数版本资源
     eigen_solver_.reset();
     eigen_matrix_ = Eigen::SparseMatrix<double>();
+
+    // 释放复数版本资源
+    eigen_solver_complex_.reset();
+    eigen_matrix_complex_ = Eigen::SparseMatrix<std::complex<double>>();
+    matrix_set_complex_ = false;
+
     matrix_set_ = false;
 }
 
@@ -798,6 +1149,53 @@ SolverResult GeneralDirectSolver::solve_with_eigen(const Eigen::VectorXd& b) {
         FEEM_ERROR("GeneralDirectSolver::solve_with_eigen - 异常: {}", e.what());
         return create_error_result(SolverStatus::NUMERICAL_ERROR,
                                    std::string("求解异常: ") + e.what());
+    }
+}
+
+SolverResult GeneralDirectSolver::decompose_with_eigen_complex() {
+    FEEM_DEBUG("GeneralDirectSolver::decompose_with_eigen_complex - 开始复数LU分解");
+
+    try {
+        eigen_solver_complex_ = std::make_unique<Eigen::SparseLU<Eigen::SparseMatrix<std::complex<double>>>>();
+
+        // 执行带部分选主元的复数LU分解 PA = LU
+        eigen_solver_complex_->compute(eigen_matrix_complex_);
+
+        if (eigen_solver_complex_->info() != Eigen::Success) {
+            FEEM_ERROR("GeneralDirectSolver::decompose_with_eigen_complex - 复数LU分解失败");
+            return create_error_result(SolverStatus::NUMERICAL_ERROR,
+                                       "复数LU分解失败（矩阵可能奇异）");
+        }
+
+        FEEM_DEBUG("GeneralDirectSolver::decompose_with_eigen_complex - 复数LU分解成功");
+        return create_success_result_complex(Eigen::VectorXcd());
+    } catch (const std::bad_alloc& e) {
+        FEEM_ERROR("GeneralDirectSolver::decompose_with_eigen_complex - 内存不足: {}", e.what());
+        return create_error_result(SolverStatus::NUMERICAL_ERROR, "内存分配失败");
+    } catch (const std::exception& e) {
+        FEEM_ERROR("GeneralDirectSolver::decompose_with_eigen_complex - 异常: {}", e.what());
+        return create_error_result(SolverStatus::NUMERICAL_ERROR,
+                                   std::string("复数LU分解异常: ") + e.what());
+    }
+}
+
+SolverResult GeneralDirectSolver::solve_with_eigen_complex(const Eigen::VectorXcd& b) {
+    FEEM_DEBUG("GeneralDirectSolver::solve_with_eigen_complex - 开始复数求解");
+
+    try {
+        // 利用缓存的P、L、U因子执行前代和回代
+        Eigen::VectorXcd x = eigen_solver_complex_->solve(b);
+
+        if (eigen_solver_complex_->info() != Eigen::Success) {
+            FEEM_ERROR("GeneralDirectSolver::solve_with_eigen_complex - 复数求解失败");
+            return create_error_result(SolverStatus::NUMERICAL_ERROR, "复数LU求解失败");
+        }
+
+        return create_success_result_complex(std::move(x));
+    } catch (const std::exception& e) {
+        FEEM_ERROR("GeneralDirectSolver::solve_with_eigen_complex - 异常: {}", e.what());
+        return create_error_result(SolverStatus::NUMERICAL_ERROR,
+                                   std::string("复数求解异常: ") + e.what());
     }
 }
 
