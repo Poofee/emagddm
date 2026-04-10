@@ -27,6 +27,7 @@ int main() {
         const auto& eigen_mat = coo.get_eigen_real();
         assert(eigen_mat.rows() == 3);
         assert(eigen_mat.cols() == 3);
+        (void)eigen_mat;
         std::cout << "   ✓ 实数 COO 矩阵测试通过" << std::endl;
     }
 
@@ -40,6 +41,7 @@ int main() {
         const auto& eigen_mat = coo.get_eigen_complex();
         assert(eigen_mat.rows() == 2);
         assert(eigen_mat.cols() == 2);
+        (void)eigen_mat;
         std::cout << "   ✓ 复数 COO 矩阵测试通过" << std::endl;
     }
 
@@ -57,6 +59,7 @@ int main() {
 
         const auto& eigen_mat = coo.get_eigen_real();
         assert(std::abs(eigen_mat.coeff(0, 0) - 3.0) < 1e-12);
+        (void)eigen_mat;
         std::cout << "   ✓ 合并重复元素测试通过" << std::endl;
     }
 
@@ -75,6 +78,7 @@ int main() {
         assert(eigen_csr.rows() == 3);
         assert(eigen_csr.cols() == 3);
         assert(eigen_csr.nonZeros() == 3);
+        (void)eigen_csr;
         std::cout << "   ✓ 实数 CSR 矩阵测试通过" << std::endl;
     }
 

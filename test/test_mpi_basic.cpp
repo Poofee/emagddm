@@ -71,9 +71,10 @@ void test_mpi_send_recv() {
         mpi_comm.send(&send_data, 1, 1);
         std::cout << "进程0发送数据: " << send_data << std::endl;
     } else if (rank == 1) {
-        int recv_data;
+        int recv_data = 0;
         int count = mpi_comm.recv(&recv_data, 1, 0);
         assert(count == 1);
+        (void)count;
         assert(recv_data == 42);
         std::cout << "进程1接收数据: " << recv_data << std::endl;
     }
@@ -172,6 +173,8 @@ void test_mpi_gather() {
                 int expected = i * 10 + j;
                 int actual = recv_data[i * 3 + j];
                 assert(actual == expected);
+                (void)expected;
+                (void)actual;
             }
         }
     }

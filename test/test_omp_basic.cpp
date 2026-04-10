@@ -102,6 +102,7 @@ void test_omp_atomic() {
     // 验证结果
     double expected_sum = NUM_ITERATIONS * 1.5;
     assert(atomic_sum == expected_sum);
+    (void)expected_sum;
     
     std::cout << "原子操作测试通过 (总和=" << atomic_sum << ")" << std::endl;
 }

@@ -8,6 +8,7 @@
 
 #include "tool/fragmented_storage.hpp"
 #include "tool/file_utils.hpp"
+#include <algorithm>
 #include <cstring>
 #include <ctime>
 #include <fstream>

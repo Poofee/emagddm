@@ -260,7 +260,7 @@ public:
 /**
  * @brief 简化并行for循环宏（自动线程数）
  */
-#define OMP_PARALLEL_FOR_AUTO OMP_PARALLEL_FOR_FULL(0, "auto", )
+#define OMP_PARALLEL_FOR_AUTO _Pragma("omp parallel for if(fe_em::OMPWrapper::get_valid_thread_num(0) > 1) num_threads(fe_em::OMPWrapper::get_valid_thread_num(0)) schedule(auto)")
 
 /**
  * @brief 临界区保护宏（自动加锁解锁）

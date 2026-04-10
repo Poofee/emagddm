@@ -38,7 +38,7 @@ bool DirectBackendManager::isBackendAvailable(DirectBackendType type) {
 #endif
 
 #ifdef HAVE_SUPERLU
-        case DirectBackendType::SUPERLU_MT:
+        case DirectBackendType::SUPERLU:
             return true;
 #endif
 
@@ -53,7 +53,7 @@ std::string DirectBackendManager::getBackendName(DirectBackendType type) {
             return "Eigen";
         case DirectBackendType::MUMPS:
             return "MUMPS";
-        case DirectBackendType::SUPERLU_MT:
+        case DirectBackendType::SUPERLU:
             return "SuperLU_MT";
         default:
             return "Unknown";
@@ -69,7 +69,7 @@ std::vector<DirectBackendType> DirectBackendManager::getAvailableBackends() {
 #endif
 
 #ifdef HAVE_SUPERLU
-    backends.push_back(DirectBackendType::SUPERLU_MT);
+    backends.push_back(DirectBackendType::SUPERLU);
 #endif
 
     return backends;

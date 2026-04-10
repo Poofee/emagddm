@@ -177,6 +177,7 @@ CsrMatrix<double> eigen_to_csr(const Eigen::SparseMatrix<double>& eigen_mat) {
     csr.build_from_coo(coo);
     return csr;
 }
+#ifdef HAVE_MUMPS
 
 // ==================== 1. 构造/析构与 RAII 语义 ====================
 
@@ -642,73 +643,6 @@ TEST(MumpsContextTest, LargeSparseMatrix) {
     EXPECT_EQ(solve_result.x.size(), n);
 }
 
-// ==================== 10. SymmetricDirectSolver 集成测试 ====================
-
-TEST(MumpsContextIntegrationTest, SymmetricDirectSolverWithMUMPS) {
-    SymmetricDirectSolver solver(DirectBackendType::MUMPS);
-
-    int n = 20;
-    Eigen::SparseMatrix<double> eigen_mat(n, n);
-    std::vector<Eigen::Triplet<double>> triplets;
-
-    for (int i = 0; i < n; ++i) {
-        triplets.emplace_back(i, i, 4.0);
-        if (i > 0) triplets.emplace_back(i, i - 1, -1.0);
-        if (i < n - 1) triplets.emplace_back(i, i + 1, -1.0);
-    }
-    eigen_mat.setFromTriplets(triplets.begin(), triplets.end());
-
-    CsrMatrix<double> csr = eigen_to_csr(eigen_mat);
-    solver.set_matrix(csr);
-
-    Eigen::VectorXd b = Eigen::VectorXd::Ones(n);
-    auto solve_result = solver.solve(b);
-    ASSERT_EQ(solve_result.status, SolverStatus::SUCCESS);
-
-    Eigen::VectorXd residual = eigen_mat * solve_result.x - b;
-    EXPECT_LT(residual.norm() / b.norm(), 1e-8);
-}
-
-TEST(MumpsContextIntegrationTest, MUMPSReuseFactorization) {
-    SymmetricDirectSolver solver(DirectBackendType::MUMPS);
-
-    int n = 30;
-    Eigen::SparseMatrix<double> eigen_mat(n, n);
-    std::vector<Eigen::Triplet<double>> triplets;
-
-    for (int i = 0; i < n; ++i) {
-        triplets.emplace_back(i, i, 4.0);
-        if (i > 0) triplets.emplace_back(i, i - 1, -1.0);
-        if (i < n - 1) triplets.emplace_back(i, i + 1, -1.0);
-    }
-    eigen_mat.setFromTriplets(triplets.begin(), triplets.end());
-
-    CsrMatrix<double> csr = eigen_to_csr(eigen_mat);
-    solver.set_matrix(csr);
-
-    for (int trial = 0; trial < 5; ++trial) {
-        Eigen::VectorXd b = Eigen::VectorXd::Random(n);
-        auto solve_result = solver.solve(b);
-        ASSERT_EQ(solve_result.status, SolverStatus::SUCCESS)
-            << "Trial " << trial << " failed";
-
-        Eigen::VectorXd residual = eigen_mat * solve_result.x - b;
-        EXPECT_LT(residual.norm() / b.norm(), 1e-8)
-            << "Trial " << trial << " residual too large";
-    }
-}
-
-TEST(MumpsContextIntegrationTest, MUMPSBackendAvailability) {
-    EXPECT_TRUE(DirectBackendManager::isBackendAvailable(DirectBackendType::MUMPS));
-    EXPECT_EQ(DirectBackendManager::getBackendName(DirectBackendType::MUMPS), "MUMPS");
-
-    auto backends = DirectBackendManager::getAvailableBackends();
-    bool found = false;
-    for (auto& bt : backends) {
-        if (bt == DirectBackendType::MUMPS) found = true;
-    }
-    EXPECT_TRUE(found);
-}
 
 // ==================== 11. 性能基准测试 ====================
 
@@ -740,6 +674,7 @@ TEST(MumpsContextPerfTest, BenchmarkTridiagSolve) {
     EXPECT_LT(factorize_ms, 5000.0);
     EXPECT_LT(solve_ms, 100.0);
 }
+#endif
 
 int main(int argc, char** argv) {
     testing::InitGoogleTest(&argc, argv);

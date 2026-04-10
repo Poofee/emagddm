@@ -63,6 +63,7 @@ void test_tri3_basic_structure() {
     assert(tri_elem.node_ids.size() == 3);
     assert(tri_elem.dof_type == DOFType::SCALAR_ONLY);
     assert(tri_elem.material_id == 1);
+    (void)tri_elem;
     
     std::cout << "✓ TRI3基本数据结构验证通过\n";
 }
@@ -164,6 +165,7 @@ void test_project_manager_integration() {
     // 创建新项目
     bool success = pm.createProject("Test2DProject");
     assert(success);
+    (void)success;
     
     // 创建空气材料（使用tool::Material类）
     auto air_material = std::make_shared<tool::Material>("Air");

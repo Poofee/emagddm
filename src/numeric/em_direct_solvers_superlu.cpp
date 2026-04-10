@@ -18,10 +18,30 @@
 #include "logger_factory.hpp"
 #include <stdexcept>
 #include <cstring>
+#include <cstdlib>
 
 #ifdef HAVE_SUPERLU
 
 namespace numeric {
+
+// ============================================================================
+// 辅助函数（与 MUMPS 实现保持一致）
+// ============================================================================
+
+static SolverResult create_success_result(Eigen::VectorXd x, int iterations = 0) {
+    SolverResult result;
+    result.status = SolverStatus::SUCCESS;
+    result.x = std::move(x);
+    result.iterations = iterations;
+    return result;
+}
+
+static SolverResult create_error_result(SolverStatus status, const std::string& error_msg) {
+    SolverResult result;
+    result.status = status;
+    result.error_msg = error_msg;
+    return result;
+}
 
 // ============================================================================
 // SuperluContext 构造/析构
@@ -38,11 +58,10 @@ SuperluContext::~SuperluContext() {
 SuperluContext::SuperluContext(SuperluContext&& other) noexcept
     : state_(other.state_), n_(other.n_), nnz_(other.nnz_),
       A_(std::move(other.A_)), L_(std::move(other.L_)),
-      U_(std::move(other.U_)), AC_(std::move(other.AC_)),
-      perm_c_(std::move(other.perm_c_)), perm_r_(std::move(other.perm_r_)),
-      etree_(std::move(other.etree_)), colcnt_h_(std::move(other.colcnt_h_)),
-      part_super_h_(std::move(other.part_super_h_)),
-      options_(std::move(other.options_)), Gstat_(std::move(other.Gstat_)) {
+      U_(std::move(other.U_)), B_(std::move(other.B_)),
+      X_(std::move(other.X_)), perm_c_(std::move(other.perm_c_)),
+      perm_r_(std::move(other.perm_r_)),
+      options_(std::move(other.options_)) {
     other.state_ = State::UNINITIALIZED;
     other.n_ = 0;
     other.nnz_ = 0;
@@ -57,14 +76,11 @@ SuperluContext& SuperluContext::operator=(SuperluContext&& other) noexcept {
         A_ = std::move(other.A_);
         L_ = std::move(other.L_);
         U_ = std::move(other.U_);
-        AC_ = std::move(other.AC_);
+        B_ = std::move(other.B_);
+        X_ = std::move(other.X_);
         perm_c_ = std::move(other.perm_c_);
         perm_r_ = std::move(other.perm_r_);
-        etree_ = std::move(other.etree_);
-        colcnt_h_ = std::move(other.colcnt_h_);
-        part_super_h_ = std::move(other.part_super_h_);
         options_ = std::move(other.options_);
-        Gstat_ = std::move(other.Gstat_);
 
         other.state_ = State::UNINITIALIZED;
         other.n_ = 0;
@@ -84,27 +100,49 @@ bool SuperluContext::initialize(int_t n, int_t nnz, double* nzval, int_t* rowind
     }
 
     try {
+        // 创建稀疏矩阵 A（列压缩格式）
         A_ = std::make_unique<SuperMatrix>();
-        L_ = std::make_unique<SuperMatrix>();
-        U_ = std::make_unique<SuperMatrix>();
-        AC_ = std::make_unique<SuperMatrix>();
+        dCreate_CompCol_Matrix(A_.get(), n, n, nnz, nzval, rowind, colptr,
+                               SLU_NC, SLU_D, SLU_GE);
 
+        // 创建解和右端项矩阵
+        B_ = std::make_unique<SuperMatrix>();
+        X_ = std::make_unique<SuperMatrix>();
+
+        // 配置 SuperLU_MT 选项
         options_ = std::make_unique<superlumt_options_t>();
-        Gstat_ = std::make_unique<Gstat_t>();
+        options_->nprocs = 1;  // 默认单线程，可通过 factorize 修改
+        options_->fact = DOFACT;
+        options_->trans = NOTRANS;
+        options_->refact = NO;
+        options_->panel_size = sp_ienv(1);
+        options_->relax = sp_ienv(2);
+        options_->usepr = NO;
+        options_->drop_tol = 0.0;
+        options_->diag_pivot_thresh = 1.0;
+        options_->SymmetricMode = NO;
+        options_->PrintStat = NO;
 
-        dCreate_Dense_Matrix(A_.get(), n, n, SLU_NC, SLU_D, SLU_GE);
-        ((NCformat*)A_->Store)->nzval = nzval;
-        ((NCformat*)A_->Store)->rowind = rowind;
-        ((NCformat*)A_->Store)->colptr = colptr;
+        // 分配排列向量和工作数组
+        perm_c_ = std::unique_ptr<int_t[]>(static_cast<int_t*>(intMalloc(n)));
+        perm_r_ = std::unique_ptr<int_t[]>(static_cast<int_t*>(intMalloc(n)));
 
-        set_default_options(options_.get());
-        options_->ColPerm = MATA_AT_PLUS;
-        options_->RowPerm = LargeDiag_MC64;
-        options_->ILU_Flag = 0;
+        if (!perm_c_ || !perm_r_) {
+            throw std::runtime_error("内存分配失败: perm_c/perm_r");
+        }
 
-        StatInit(Gstat_.get());
-        perm_c_ = std::make_unique<int_t[]>(n);
-        perm_r_ = std::make_unique<int_t[]>(n);
+        // 获取列排列（最小度排序）
+        int_t permc_spec = 1;  // MMD on A'*A
+        get_perm_c(permc_spec, A_.get(), perm_c_.get());
+
+        // 分配选项中的工作数组
+        options_->etree = static_cast<int_t*>(intMalloc(n));
+        options_->colcnt_h = static_cast<int_t*>(intMalloc(n));
+        options_->part_super_h = static_cast<int_t*>(intMalloc(n));
+
+        if (!options_->etree || !options_->colcnt_h || !options_->part_super_h) {
+            throw std::runtime_error("内存分配失败: 工作数组");
+        }
 
         n_ = n;
         nnz_ = nnz;
@@ -124,37 +162,38 @@ int_t SuperluContext::factorize(int_t nprocs) {
         return -1;
     }
 
+    (void)nprocs;  // 通过 options_->nprocs 设置
+
     try {
-        etree_ = std::make_unique<int_t[]>(2 * n_);
-        colcnt_h_ = std::make_unique<int_t[]>(n_);
-        part_super_h_ = std::make_unique<int_t[]>(n_);
+        // 创建 L 和 U 矩阵
+        L_ = std::make_unique<SuperMatrix>();
+        U_ = std::make_unique<SuperMatrix>();
 
+        // 分配均衡和误差界数组
+        equed_t equed = NOEQUIL;
+        auto R = std::unique_ptr<double[]>(static_cast<double*>(SUPERLU_MALLOC(n_ * sizeof(double))));
+        auto C = std::unique_ptr<double[]>(static_cast<double*>(SUPERLU_MALLOC(n_ * sizeof(double))));
+        auto ferr = std::unique_ptr<double[]>(static_cast<double*>(SUPERLU_MALLOC(sizeof(double))));
+        auto berr = std::unique_ptr<double[]>(static_cast<double*>(SUPERLU_MALLOC(sizeof(double))));
+
+        double rpg = 0.0, rcond = 0.0;
+        superlu_memusage_t mem_usage{};
         int_t info = 0;
-        pdgstrf_init(n_, options_.get(), A_.get(), perm_c_.get(), perm_r_.get(),
-                     etree_.get(), colcnt_h_.get(), part_super_h_.get(),
-                     L_.get(), U_.get(), Gstat_.get());
 
-        if (info != 0) {
-            FEEM_ERROR("SuperluContext::factorize - pdgstrf_init失败: info={}", info);
+        // 执行 LU 分解（使用 pdgssvx 高级接口）
+        pdgssvx(options_->nprocs, options_.get(), A_.get(),
+                perm_c_.get(), perm_r_.get(),
+                &equed, R.get(), C.get(),
+                L_.get(), U_.get(),
+                nullptr, nullptr,  // B 和 X 在 solve 中设置
+                &rpg, &rcond,
+                ferr.get(), berr.get(),
+                &mem_usage, &info);
+
+        if (info < 0 && info != -(n_ + 1)) {
+            FEEM_ERROR("SuperluContext::factorize - pdgssvx失败: info={}", info);
             release_factors();
             return info;
-        }
-
-        pdgstrf(options_.get(), A_.get(), perm_c_.get(), perm_r_.get(),
-                 etree_.get(), colcnt_h_.get(), part_super_h_.get(),
-                 L_.get(), U_.get(), &info);
-
-        if (info != 0) {
-            FEEM_ERROR("SuperluContext::factorize - pdgstrf失败: info={}", info);
-            release_factors();
-            return info;
-        }
-
-        pxgstrf_finalize(options_.get(), L_.get());
-        pxgstrf_finalize(options_.get(), U_.get());
-
-        if (AC_) {
-            AC_ = nullptr;
         }
 
         state_ = State::FACTORIZED;
@@ -180,26 +219,44 @@ SolverResult SuperluContext::solve(const Eigen::VectorXd& b) {
     }
 
     try {
-        Eigen::VectorXd x(b.size());
-        SuperMatrix B_mat, X_mat;
-        dCreate_Dense_Matrix(&B_mat, n_, 1, SLU_DN, SLU_D, SLU_GE);
-        dCreate_Dense_Matrix(&X_mat, n_, 1, SLU_DN, SLU_D, SLU_GE);
-        DNformat* B_store = static_cast<DNformat*>(B_mat.Store);
-        DNformat* X_store = static_cast<DNformat*>(X_mat.Store);
-        memcpy(B_store->nzval, b.data(), sizeof(double) * n_);
+        Eigen::VectorXd x = Eigen::VectorXd::Zero(n_);
 
+        // 创建右端项和解向量的密集矩阵
+        auto rhsb = std::unique_ptr<double[]>(static_cast<double*>(doubleMalloc(n_)));
+        auto rhsx = std::unique_ptr<double[]>(static_cast<double*>(doubleMalloc(n_)));
+
+        if (!rhsb || !rhsx) {
+            throw std::runtime_error("内存分配失败: rhs");
+        }
+
+        std::memcpy(rhsb.get(), b.data(), sizeof(double) * n_);
+        std::memset(rhsx.get(), 0, sizeof(double) * n_);
+
+        dCreate_Dense_Matrix(B_.get(), n_, 1, rhsb.get(), n_, SLU_DN, SLU_D, SLU_GE);
+        dCreate_Dense_Matrix(X_.get(), n_, 1, rhsx.get(), n_, SLU_DN, SLU_D, SLU_GE);
+
+        // 使用 dgstrs 求解（前代-回代）
+        // 注意：dgstrs 直接在 B 矩阵中存储解
         trans_t trans = NOTRANS;
-        dgstrs(trans, L_.get(), U_.get(), perm_c_.get(), perm_r_.get(),
-               &B_mat, &X_mat, Gstat_.get(), &info);
+        Gstat_t Gstat{};
+        StatInit(n_, 1, &Gstat);
+        int_t info = 0;
+        dgstrs(trans, L_.get(), U_.get(), perm_r_.get(), perm_c_.get(),
+               B_.get(), &Gstat, &info);
+        StatFree(&Gstat);
 
         if (info != 0) {
+            Destroy_SuperMatrix_Store(B_.get());
             return create_error_result(SolverStatus::NUMERICAL_ERROR,
                                      "dgstrs失败: info=" + std::to_string(info));
         }
 
-        memcpy(x.data(), X_store->nzval, sizeof(double) * n_);
-        Destroy_SuperMatrix_Store(&B_mat);
-        Destroy_SuperMatrix_Store(&X_mat);
+        // 从 B 矩阵复制解向量
+        DNformat* B_store = static_cast<DNformat*>(B_->Store);
+        std::memcpy(x.data(), B_store->nzval, sizeof(double) * n_);
+
+        // 清理密集矩阵
+        Destroy_SuperMatrix_Store(B_.get());
 
         return create_success_result(std::move(x));
 
@@ -214,22 +271,29 @@ SolverResult SuperluContext::solve(const Eigen::VectorXd& b) {
 
 void SuperluContext::reset() {
     release_factors();
-    release_ac_matrix();
 
-    Destroy_SuperMatrix_Store(A_.get());
-    A_.reset();
-    L_.reset();
-    U_.reset();
+    if (A_) {
+        Destroy_CompCol_Matrix(A_.get());
+        A_.reset();
+    }
+    if (B_) {
+        Destroy_SuperMatrix_Store(B_.get());
+        B_.reset();
+    }
+    if (X_) {
+        Destroy_SuperMatrix_Store(X_.get());
+        X_.reset();
+    }
 
     perm_c_.reset();
     perm_r_.reset();
-    etree_.reset();
-    colcnt_h_.reset();
-    part_super_h_.reset();
-    options_.reset();
-    Gstat_.reset();
 
-    StatFree(Gstat_.get());
+    if (options_) {
+        SUPERLU_FREE(options_->etree);
+        SUPERLU_FREE(options_->colcnt_h);
+        SUPERLU_FREE(options_->part_super_h);
+        options_.reset();
+    }
 
     n_ = 0;
     nnz_ = 0;
@@ -238,20 +302,13 @@ void SuperluContext::reset() {
 
 void SuperluContext::release_factors() {
     if (L_ && L_->nrow >= 0) {
-        Destroy_SuperNode_Matrix(L_.get());
+        Destroy_SuperNode_SCP(L_.get());
     }
     if (U_ && U_->nrow >= 0) {
-        Destroy_CompCol_Matrix(U_.get());
+        Destroy_CompCol_NCP(U_.get());
     }
     L_ = nullptr;
     U_ = nullptr;
-}
-
-void SuperluContext::release_ac_matrix() {
-    if (AC_ && AC_->nrow >= 0) {
-        pxgstrf_finalize(options_.get(), AC_.get());
-    }
-    AC_ = nullptr;
 }
 
 bool SuperluContext::is_factored() const { return state_ == State::FACTORIZED; }

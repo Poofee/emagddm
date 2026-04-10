@@ -76,19 +76,15 @@ private:
     std::unique_ptr<SuperMatrix> A_;
     std::unique_ptr<SuperMatrix> L_;
     std::unique_ptr<SuperMatrix> U_;
-    std::unique_ptr<SuperMatrix> AC_;
+    std::unique_ptr<SuperMatrix> B_;  // 右端项矩阵
+    std::unique_ptr<SuperMatrix> X_;  // 解向量矩阵
 
     std::unique_ptr<int_t[]> perm_c_;
     std::unique_ptr<int_t[]> perm_r_;
-    std::unique_ptr<int_t[]> etree_;
-    std::unique_ptr<int_t[]> colcnt_h_;
-    std::unique_ptr<int_t[]> part_super_h_;
 
     std::unique_ptr<superlumt_options_t> options_;
-    std::unique_ptr<Gstat_t> Gstat_;
 
     void release_factors();
-    void release_ac_matrix();
 };
 
 #endif  // HAVE_SUPERLU

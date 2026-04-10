@@ -164,6 +164,10 @@ void test_material_extraction() {
         
         assert(found_copper && "未找到 copper 材料");
         assert(found_nonlinear && "未找到非线性材料");
+
+        // 抑制 Release 模式下 assert 被禁用时的未使用变量警告
+        (void)found_copper;
+        (void)found_nonlinear;
         
         std::cout << "\n✅ 所有材料提取测试通过!" << std::endl;
         

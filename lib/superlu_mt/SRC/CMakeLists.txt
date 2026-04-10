@@ -12,6 +12,23 @@ endif ()
 target_link_libraries (superlu_mt${PLAT} PRIVATE ${BLAS_LIB})
 target_compile_definitions (superlu_mt${PLAT} PRIVATE Add_)
 
+# 禁用第三方代码的警告（避免 -Werror 导致编译失败）
+if(CMAKE_C_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID STREQUAL "Clang")
+    target_compile_options(superlu_mt${PLAT} PRIVATE
+        -Wno-unused-variable
+        -Wno-unused-but-set-variable
+        -Wno-unused-parameter
+        -Wno-unused-label
+        -Wno-unused-function
+        -Wno-maybe-uninitialized
+        -Wno-comment
+        -Wno-parentheses
+        -Wno-unknown-pragmas
+        -Wno-sequence-point
+        -Wno-old-style-definition
+    )
+endif()
+
 if (PLAT STREQUAL "_PTHREAD")
   target_compile_definitions (superlu_mt${PLAT} PUBLIC __PTHREAD)
   target_link_libraries (superlu_mt${PLAT} PRIVATE ${CMAKE_THREAD_LIBS_INIT})

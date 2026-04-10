@@ -78,10 +78,13 @@ void test_tet4_element_geometry() {
     int num_nodes = ElementGeometry::get_num_nodes(ElemType::TET4);
     int num_edges = ElementGeometry::get_num_edges(ElemType::TET4);
     int num_faces = ElementGeometry::get_num_faces(ElemType::TET4);
-    
+
     assert(num_nodes == 4);    // TET4有4个节点
     assert(num_edges == 6);    // TET4有6条棱边 C(4,2)=6
     assert(num_faces == 4);    // TET4有4个三角形面
+    (void)num_nodes;
+    (void)num_edges;
+    (void)num_faces;
     
     // 获取并验证棱边定义
     auto edges = ElementGeometry::get_local_edges(ElemType::TET4);
@@ -122,6 +125,7 @@ void test_tet4_element_geometry() {
     // 验证每个面都是三角形
     for (const auto& face : faces) {
         assert(face.size() == 3);  // TET4的所有面都是三角形
+        (void)face;
     }
     
     std::cout << "✓ TET4几何定义验证通过\n";

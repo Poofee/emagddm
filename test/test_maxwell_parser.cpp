@@ -23,6 +23,7 @@ $end 'TestBlock'
     
     bool result = parser.parse_content(test_content);
     assert(result && "基础解析失败");
+    (void)result;
     
     auto root = parser.get_root();
     assert(root && "根节点为空");
@@ -63,6 +64,7 @@ $end 'ParentBlock'
     
     bool result = parser.parse_content(test_content);
     assert(result && "嵌套块解析失败");
+    (void)result;
     
     auto root = parser.get_root();
     assert(root && "根节点为空");
@@ -99,6 +101,7 @@ $end 'ArrayTest'
     
     bool result = parser.parse_content(test_content);
     assert(result && "数组解析失败");
+    (void)result;
     
     auto root = parser.get_root();
     
@@ -229,6 +232,7 @@ $end 'AnsoftProject')";
     
     bool result = parser.parse_content(test_content);
     assert(result && "实际文件片段解析失败");
+    (void)result;
     
     auto root = parser.get_root();
     assert(root && "根节点为空");
@@ -245,7 +249,10 @@ $end 'AnsoftProject')";
     // 验证子块
     auto desktop_blocks = root->find_children("Desktop");
     assert(desktop_blocks.size() == 1 && "Desktop块数量不匹配");
-    
+
+    // 抑制 Release 模式下 assert 被禁用时的未使用变量警告
+    (void)desktop_blocks;
+
     std::cout << "实际Maxwell文件片段测试通过" << std::endl;
 }
 
@@ -264,6 +271,7 @@ $end 'WrongBlock')";
     
     bool result = parser.parse_content(test_content);
     assert(!result && "错误处理失败：应该检测到块结束标记不匹配");
+    (void)result;
     
     std::cout << "错误处理测试通过" << std::endl;
 }
