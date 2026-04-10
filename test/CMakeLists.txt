@@ -610,8 +610,7 @@ target_link_libraries(test_superlu_mt_integration
 )
 
 # 若SuperLU_MT可用，链接对应库并启用SuperLU后端
-if(SUPERLU_MT_AVAILABLE AND TARGET ${SUPERLU_MT_TARGET})
-    target_link_libraries(test_superlu_mt_integration PRIVATE ${SUPERLU_MT_TARGET})
+if(SUPERLU_MT_AVAILABLE AND TARGET superlu_lib)
     target_compile_definitions(test_superlu_mt_integration PRIVATE HAVE_SUPERLU)
 endif()
 
@@ -642,9 +641,8 @@ target_link_libraries(test_superlu_diagnostic
 
 message(STATUS "  [TEST-CFG] SUPERLU_MT_AVAILABLE=${SUPERLU_MT_AVAILABLE}")
 message(STATUS "  [TEST-CFG] SUPERLU_MT_TARGET=${SUPERLU_MT_TARGET}")
-if(SUPERLU_MT_AVAILABLE AND TARGET ${SUPERLU_MT_TARGET})
+if(SUPERLU_MT_AVAILABLE AND TARGET superlu_lib)
     message(STATUS "  [TEST-CFG] -> Enabling HAVE_SUPERLU for test_superlu_diagnostic")
-    target_link_libraries(test_superlu_diagnostic PRIVATE ${SUPERLU_MT_TARGET})
     target_compile_definitions(test_superlu_diagnostic PRIVATE HAVE_SUPERLU)
 else()
     message(STATUS "  [TEST-CFG] -> SuperLU NOT available for test_superlu_diagnostic")
@@ -676,9 +674,8 @@ target_link_libraries(test_superlu_comprehensive
 )
 
 message(STATUS "  [TEST-CFG] Configuring test_superlu_comprehensive...")
-if(SUPERLU_MT_AVAILABLE AND TARGET ${SUPERLU_MT_TARGET})
+if(SUPERLU_MT_AVAILABLE AND TARGET superlu_lib)
     message(STATUS "  [TEST-CFG] -> Enabling HAVE_SUPERLU for test_superlu_comprehensive")
-    target_link_libraries(test_superlu_comprehensive PRIVATE ${SUPERLU_MT_TARGET})
     target_compile_definitions(test_superlu_comprehensive PRIVATE HAVE_SUPERLU)
 else()
     message(STATUS "  [TEST-CFG] -> SuperLU NOT available for test_superlu_comprehensive")
@@ -712,12 +709,83 @@ target_link_libraries(test_superlu_context
 )
 
 message(STATUS "  [TEST-CFG] Configuring test_superlu_context...")
-if(SUPERLU_MT_AVAILABLE AND TARGET ${SUPERLU_MT_TARGET})
+if(SUPERLU_MT_AVAILABLE AND TARGET superlu_lib)
     message(STATUS "  [TEST-CFG] -> Enabling HAVE_SUPERLU for test_superlu_context")
-    target_link_libraries(test_superlu_context PRIVATE ${SUPERLU_MT_TARGET})
     target_compile_definitions(test_superlu_context PRIVATE HAVE_SUPERLU)
 else()
     message(STATUS "  [TEST-CFG] -> SuperLU NOT available for test_superlu_context")
 endif()
 
 add_test(NAME test_superlu_context COMMAND test_superlu_context)
+
+# ==================== MumpsContext RAII 封装全面测试 ====================
+# 覆盖 MumpsContext 类的所有公开接口：构造/析构、initialize、factorize、solve、
+# reset、移动语义、状态机转换、内存安全、精度验证、与 SymmetricDirectSolver 集成
+add_executable(test_mumps_context
+    test_mumps_context.cpp
+)
+
+target_include_directories(test_mumps_context
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/numeric
+        ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+        ${CMAKE_SOURCE_DIR}/lib/eigen
+)
+
+target_link_libraries(test_mumps_context
+    PRIVATE
+        numeric_lib
+        tool_lib
+        spdlog_lib
+        GTest::gtest
+        GTest::gtest_main
+)
+
+message(STATUS "  [TEST-CFG] Configuring test_mumps_context...")
+if(MUMPS_AVAILABLE)
+    message(STATUS "  [TEST-CFG] -> Enabling HAVE_MUMPS for test_mumps_context")
+    target_link_libraries(test_mumps_context PRIVATE mumps_lib)
+    target_compile_definitions(test_mumps_context PRIVATE HAVE_MUMPS)
+    target_include_directories(test_mumps_context PRIVATE ${MUMPS_ROOT}/include ${MUMPS_ROOT}/libseq)
+else()
+    message(STATUS "  [TEST-CFG] -> MUMPS NOT available for test_mumps_context")
+endif()
+
+add_test(NAME test_mumps_context COMMAND test_mumps_context)
+
+# ============================================================
+# test_complex_mumps_context
+# ============================================================
+add_executable(test_complex_mumps_context test_complex_mumps_context.cpp)
+
+target_include_directories(test_complex_mumps_context
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/numeric
+        ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/lib/eigen
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+)
+
+target_link_libraries(test_complex_mumps_context
+    PRIVATE
+        numeric_lib
+        tool_lib
+        spdlog_lib
+        GTest::gtest
+        GTest::gtest_main
+)
+
+message(STATUS "  [TEST-CFG] Configuring test_complex_mumps_context...")
+if(MUMPS_AVAILABLE)
+    message(STATUS "  [TEST-CFG] -> Enabling HAVE_MUMPS for test_complex_mumps_context")
+    target_link_libraries(test_complex_mumps_context PRIVATE mumps_lib)
+    target_compile_definitions(test_complex_mumps_context PRIVATE HAVE_MUMPS)
+    target_include_directories(test_complex_mumps_context PRIVATE ${MUMPS_ROOT}/include ${MUMPS_ROOT}/libseq)
+else()
+    message(STATUS "  [TEST-CFG] -> MUMPS NOT available for test_complex_mumps_context")
+endif()
+
+add_test(NAME test_complex_mumps_context COMMAND test_complex_mumps_context)

@@ -63,6 +63,13 @@ message(STATUS "  fetidp_lib: ${fetidp_lib_SOURCES}")
 # 核心数值层模块
 # ============================================================
 collect_sources(numeric_lib_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/numeric")
+
+# MUMPS 源文件从 numeric_lib 中排除，放入独立的 mumps_lib
+# SuperLU 源文件从 numeric_lib 中排除，放入独立的 superlu_lib
+list(FILTER numeric_lib_SOURCES EXCLUDE REGEX "em_direct_solvers_mumps\\.cpp$")
+list(FILTER numeric_lib_SOURCES EXCLUDE REGEX "em_direct_solvers_mumps_complex\\.cpp$")
+list(FILTER numeric_lib_SOURCES EXCLUDE REGEX "em_direct_solvers_superlu\\.cpp$")
+
 add_library(numeric_lib ${numeric_lib_SOURCES})
 
 target_include_directories(numeric_lib
@@ -80,11 +87,83 @@ target_link_libraries(numeric_lib
         tool_lib
 )
 
-# 链接 SuperLU_MT 库（若可用）
+# SuperLU_MT 独立编译单元
 if(SUPERLU_MT_AVAILABLE AND TARGET ${SUPERLU_MT_TARGET})
-    target_link_libraries(numeric_lib PRIVATE ${SUPERLU_MT_TARGET})
+    add_library(superlu_lib STATIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/numeric/em_direct_solvers_superlu.cpp"
+    )
+
+    target_include_directories(superlu_lib
+        PRIVATE
+            ${CMAKE_SOURCE_DIR}/include
+            ${CMAKE_SOURCE_DIR}/include/numeric
+            ${CMAKE_SOURCE_DIR}/lib/eigen
+            ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+    )
+
+    target_compile_definitions(superlu_lib PRIVATE HAVE_SUPERLU)
+
+    target_link_libraries(superlu_lib
+        PUBLIC
+            ${SUPERLU_MT_TARGET}
+        PRIVATE
+            include_lib
+            spdlog_lib
+    )
+
+    # numeric_lib 需要 HAVE_SUPERLU 宏来编译 SuperLU 分支的 switch/case 代码
+    # 同时需要链接 superlu_lib 来解析 SuperLU 符号
     target_compile_definitions(numeric_lib PRIVATE HAVE_SUPERLU)
-    message(STATUS "  numeric_lib: linked with ${SUPERLU_MT_TARGET} (HAVE_SUPERLU defined)")
+    target_link_libraries(numeric_lib PUBLIC superlu_lib)
+
+    message(STATUS "  superlu_lib: em_direct_solvers_superlu.cpp (HAVE_SUPERLU defined)")
+    message(STATUS "  numeric_lib: HAVE_SUPERLU defined (SuperLU symbols resolved via superlu_lib)")
+endif()
+
+# MUMPS 独立编译单元（隔离 Intel Fortran 运行时依赖）
+if(MUMPS_AVAILABLE)
+    add_library(mumps_lib STATIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/numeric/em_direct_solvers_mumps.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/numeric/em_direct_solvers_mumps_complex.cpp"
+    )
+
+    target_include_directories(mumps_lib
+        PRIVATE
+            ${CMAKE_SOURCE_DIR}/include
+            ${CMAKE_SOURCE_DIR}/include/numeric
+            ${CMAKE_SOURCE_DIR}/lib/eigen
+            ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+            ${MUMPS_ROOT}/include
+            ${MUMPS_ROOT}/libseq
+    )
+
+    target_compile_definitions(mumps_lib PRIVATE HAVE_MUMPS)
+
+    target_link_libraries(mumps_lib
+        PUBLIC
+            mumps pord mpiseq openblas
+        PRIVATE
+            include_lib
+            spdlog_lib
+    )
+
+    # /nofor_main 仅对 Intel xilink.exe 有效，MSVC link.exe 不识别
+    # 改用 MAIN__ stub 函数解决 Fortran 运行时 main 冲突
+
+    if(DEFINED INTEL_FORTRAN_LIB_DIR AND EXISTS ${INTEL_FORTRAN_LIB_DIR})
+        target_link_directories(mumps_lib PUBLIC ${INTEL_FORTRAN_LIB_DIR})
+    endif()
+
+    # numeric_lib 需要 HAVE_MUMPS 宏来编译 MUMPS 分支的 switch/case 代码
+    # 同时需要链接 mumps_lib 来解析 MUMPS 符号
+    # /nofor_main 通过 mumps_lib 的 PUBLIC link option 自动传播
+    target_compile_definitions(numeric_lib PRIVATE HAVE_MUMPS)
+    target_link_libraries(numeric_lib PUBLIC mumps_lib)
+
+    message(STATUS "  mumps_lib: em_direct_solvers_mumps.cpp (HAVE_MUMPS defined)")
+    message(STATUS "  numeric_lib: HAVE_MUMPS defined (MUMPS symbols resolved via mumps_lib)")
+else()
+    message(STATUS "  numeric_lib: MUMPS not available")
 endif()
 
 if(USE_MPI)
@@ -147,6 +226,10 @@ target_link_libraries(app_lib
         numeric_lib
         tool_lib
 )
+
+if(MUMPS_AVAILABLE AND TARGET mumps_lib)
+    target_link_libraries(app_lib PRIVATE mumps_lib)
+endif()
 
 if(USE_MPI)
     target_link_libraries(app_lib PRIVATE ${MPI_CXX_LIBRARIES})

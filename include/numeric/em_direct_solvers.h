@@ -276,6 +276,275 @@ private:
 
 #endif  // EM_SOLVER_HAS_SUPERLU
 
+#if EM_SOLVER_HAS_MUMPS
+
+/**
+ * @class MumpsContext
+ * @brief MUMPS 双精度直接求解器 RAII 封装，管理完整的分解-求解生命周期
+ * @details 封装 MUMPS DMUMPS_STRUC_C 数据结构和 C API，提供类型安全的 C++ 接口。
+ *          严格遵循 MUMPS 官方推荐的调用顺序（参考 c_example.c）：
+ *
+ * @par 生命周期（严格遵循官方流程）：
+ * @code
+ * // 1. 初始化（job=-1）
+ * ctx.initialize(sym);
+ *
+ * // 2. 设置矩阵数据并执行分析+分解（job=5）
+ * ctx.set_matrix_and_factorize(n, nz, irn, jcn, a);
+ *
+ * // 3. 求解（job=3）—— 可重复调用
+ * for (each rhs) {
+ *     Eigen::VectorXd x = ctx.solve(b);
+ * }
+ *
+ * // 4. 清理（job=-2）—— RAII 自动调用
+ * @endcode
+ *
+ * @par MUMPS job 参数对照：
+ * | job | 含义 | 对应方法 |
+ * |-----|------|---------|
+ * | -1  | 初始化 | initialize() |
+ * | 1   | 分析 | (包含在 factorize 中) |
+ * | 2   | 分解 | (包含在 factorize 中) |
+ * | 3   | 求解 | solve() |
+ * | 5   | 分析+分解 | factorize() |
+ * | -2  | 销毁 | reset() |
+ *
+ * @par 内存安全保证：
+ * - initialize(job=-1) 分配的内部工作数组由 destroy(job=-2) 释放
+ * - 用户提供的 irn/jcn/a 数组所有权不转移（MUMPS 仅持有指针）
+ * - rhs 向量在 solve() 中复制，MUMPS 原地修改不影响原始数据
+ * - 析构函数保证调用 dmumps_c(job=-2) 释放所有 MUMPS 内部资源
+ *
+ * @warning 此类非线程安全，外部需同步保护 factorize/solve 调用
+ * @note 依赖 dmumps_c.h 中声明的 MUMPS C API
+ */
+class MumpsContext {
+public:
+    /**
+     * @brief 默认构造函数，将所有内部状态初始化为未就绪
+     */
+    MumpsContext();
+
+    /**
+     * @brief 析构函数，自动释放所有 MUMPS 资源（调用 job=-2）
+     */
+    ~MumpsContext();
+
+    /** 禁止拷贝（管理唯一资源） */
+    MumpsContext(const MumpsContext&) = delete;
+    MumpsContext& operator=(const MumpsContext&) = delete;
+
+    /** 允许移动语义 */
+    MumpsContext(MumpsContext&& other) noexcept;
+    MumpsContext& operator=(MumpsContext&& other) noexcept;
+
+    /**
+     * @brief 初始化 MUMPS 实例（job=-1）
+     * @param sym 矩阵对称性标志：0=不对称，1=对称正定，2=一般对称
+     * @return true 初始化成功
+     * @return false 初始化失败
+     *
+     * @details 执行 MUMPS 初始化：
+     * 1. 设置 par=1（主机工作模式）
+     * 2. 设置 sym 参数
+     * 3. 调用 dmumps_c(job=-1) 初始化实例
+     * 4. 配置默认 ICNTL 控制参数
+     *
+     * @pre 尚未初始化或已 reset()
+     * @post 内部状态为 INITIALIZED
+     */
+    bool initialize(int sym = 0);
+
+    /**
+     * @brief 设置矩阵数据并执行分析+分解（job=5）
+     * @param n   矩阵维度
+     * @param nz  非零元个数
+     * @param irn 行索引数组（1-based，长度 nz，调用方保持有效直到 reset）
+     * @param jcn 列索引数组（1-based，长度 nz，调用方保持有效直到 reset）
+     * @param a   非零值数组（长度 nz，调用方保持有效直到 reset）
+     * @return 0 成功；<0 MUMPS 错误码
+     *
+     * @details 执行流程：
+     * 1. 设置矩阵数据指针到 DMUMPS_STRUC_C
+     * 2. 调用 dmumps_c(job=5) 执行分析+分解
+     * 3. 检查 info[0] 错误码
+     *
+     * @pre 必须已成功调用 initialize()
+     * @post 内部状态为 FACTORIZED，可调用 solve()
+     * @warning irn/jcn/a 指针必须在下次 factorize() 或 reset() 前保持有效
+     */
+    int factorize(int n, int nz, int* irn, int* jcn, double* a);
+
+    /**
+     * @brief 使用缓存的分解结果执行求解（job=3）
+     * @param b 右端项向量（维度必须与 factorize 时的 n 一致）
+     * @return SolverResult 包含解向量和状态信息
+     *
+     * @details 执行流程：
+     * 1. 复制 b 到内部 rhs 缓冲区（MUMPS 会原地修改 rhs 为解）
+     * 2. 设置 job=3，调用 dmumps_c()
+     * 3. 从 rhs 缓冲区提取解向量
+     *
+     * @pre 必须已成功调用 factorize()
+     * @note 可多次调用以复用分解结果
+     */
+    SolverResult solve(const Eigen::VectorXd& b);
+
+    /**
+     * @brief 重置所有内部状态并释放 MUMPS 资源（job=-2）
+     */
+    void reset();
+
+    /**
+     * @brief 检查是否已完成分解
+     */
+    bool is_factored() const { return state_ == State::FACTORIZED; }
+
+    /**
+     * @brief 检查是否已初始化
+     */
+    bool is_initialized() const { return state_ == State::INITIALIZED || state_ == State::FACTORIZED; }
+
+    /**
+     * @brief 获取矩阵维度
+     */
+    int matrix_size() const { return n_; }
+
+private:
+    enum class State {
+        UNINITIALIZED,
+        INITIALIZED,
+        FACTORIZED
+    };
+
+    State state_ = State::UNINITIALIZED;
+    int n_ = 0;
+    DMUMPS_STRUC_C mumps_data_;
+    std::vector<double> rhs_buffer_;
+
+    /**
+     * @brief 配置 MUMPS 默认 ICNTL 控制参数
+     */
+    void configure_default_icntl();
+};
+
+#endif  // EM_SOLVER_HAS_MUMPS
+
+#if EM_SOLVER_HAS_MUMPS
+
+/**
+ * @class ComplexMumpsContext
+ * @brief MUMPS 双精度复数直接求解器 RAII 封装，管理完整的分解-求解生命周期
+ * @details 封装 MUMPS ZMUMPS_STRUC_C 数据结构和 zmumps_c C API，
+ *          提供类型安全的 C++ 复数接口。与 MumpsContext（双精度实数）对称设计。
+ *
+ * @par 复数类型映射：
+ * - C++ 侧：std::complex\<double\>（16 字节，实部+虚部连续存储）
+ * - MUMPS 侧：ZMUMPS_COMPLEX = mumps_double_complex {double r, double i}
+ * - C++11 标准保证两者内存布局兼容，可通过 reinterpret_cast 互转
+ *
+ * @par 生命周期（与 MumpsContext 完全一致）：
+ * @code
+ * ComplexMumpsContext ctx;
+ * ctx.initialize(sym);                                    // job=-1
+ * ctx.factorize(n, nz, irn, jcn, a_complex);              // job=1+2
+ * auto result = ctx.solve(b_complex);                     // job=3
+ * ctx.reset();                                            // job=-2
+ * @endcode
+ *
+ * @par 典型使用场景：
+ * - 频域电磁场分析（Maxwell 方程的复数形式）
+ * - 涡流场分析（复数磁导率/复数电导率）
+ * - 阻抗矩阵求解（散射参数计算）
+ * - 时谐场分析（e^{jωt} 约定下的复数线性系统）
+ *
+ * @warning 此类非线程安全，外部需同步保护 factorize/solve 调用
+ * @note 依赖 zmumps_c.h 中声明的 MUMPS 复数 C API
+ */
+class ComplexMumpsContext {
+public:
+    ComplexMumpsContext();
+    ~ComplexMumpsContext();
+
+    ComplexMumpsContext(const ComplexMumpsContext&) = delete;
+    ComplexMumpsContext& operator=(const ComplexMumpsContext&) = delete;
+    ComplexMumpsContext(ComplexMumpsContext&& other) noexcept;
+    ComplexMumpsContext& operator=(ComplexMumpsContext&& other) noexcept;
+
+    /**
+     * @brief 初始化 MUMPS 复数实例（job=-1）
+     * @param sym 矩阵对称性标志：0=不对称，1=Hermitian正定，2=一般Hermitian
+     * @return true 初始化成功
+     *
+     * @note 对于复数矩阵，sym=1 表示 Hermitian 正定（A = A^H），
+     *       sym=2 表示一般 Hermitian（A = A^H 但未必正定）
+     */
+    bool initialize(int sym = 0);
+
+    /**
+     * @brief 执行复数矩阵分析+分解（job=1 + job=2）
+     * @param n   矩阵维度
+     * @param nz  非零元个数
+     * @param irn 行索引数组（1-based，长度 nz）
+     * @param jcn 列索引数组（1-based，长度 nz）
+     * @param a   复数非零值数组（长度 nz，std::complex\<double\> 格式）
+     * @return 0 成功，<0 MUMPS 错误码
+     *
+     * @warning irn/jcn/a 指针必须在下次 factorize() 或 reset() 前保持有效
+     * @note Windows+Intel Fortran 下 JOB=5 存在 NNZ 传递 bug，使用 JOB=1+JOB=2 替代
+     */
+    int factorize(int n, int nz, int* irn, int* jcn, std::complex<double>* a);
+
+    /**
+     * @brief 使用缓存的分解结果执行复数求解（job=3）
+     * @param b 复数右端项向量（维度必须与 factorize 时的 n 一致）
+     * @return SolverResult 包含复数解向量和状态信息
+     *
+     * @note result.x 为实数向量（长度 2n），按 [Re(x0), Im(x0), Re(x1), Im(x1), ...] 排列
+     *       调用方可通过 extract_complex() 辅助函数转换为 Eigen::VectorXcd
+     */
+    SolverResult solve(const Eigen::VectorXcd& b);
+
+    /**
+     * @brief 重置所有内部状态并释放 MUMPS 资源（job=-2）
+     */
+    void reset();
+
+    bool is_factored() const { return state_ == State::FACTORIZED; }
+    bool is_initialized() const { return state_ == State::INITIALIZED || state_ == State::FACTORIZED; }
+    int matrix_size() const { return n_; }
+
+private:
+    enum class State { UNINITIALIZED, INITIALIZED, FACTORIZED };
+
+    State state_ = State::UNINITIALIZED;
+    int n_ = 0;
+    ZMUMPS_STRUC_C zmumps_data_;
+    std::vector<ZMUMPS_COMPLEX> rhs_buffer_;
+
+    void configure_default_icntl();
+};
+
+/**
+ * @brief 从 SolverResult 的实数向量中提取复数解
+ * @param result 求解结果（result.x 按 [Re,Im,Re,Im,...] 交错排列）
+ * @return Eigen::VectorXcd 复数解向量
+ *
+ * @details 将 result.x（长度 2n）转换为 VectorXcd（长度 n）：
+ *          x_complex[i] = std::complex<double>(result.x(2*i), result.x(2*i+1))
+ */
+inline Eigen::VectorXcd extract_complex(const SolverResult& result) {
+    const int n = result.x.size() / 2;
+    Eigen::VectorXcd x(n);
+    for (int i = 0; i < n; ++i) {
+        x(i) = std::complex<double>(result.x(2 * i), result.x(2 * i + 1));
+    }
+    return x;
+}
+
+#endif  // EM_SOLVER_HAS_MUMPS
+
 /**
  * @class DirectBackendManager
  * @brief 直接求解器后端可用性管理器
@@ -495,9 +764,10 @@ private:
 #endif
 
 #if EM_SOLVER_HAS_MUMPS
-    // MUMPS后端数据结构
-    struct DMUMPS_STRUC_C mumps_data_;                   ///< MUMPS工作数据结构
-    bool mumps_initialized_ = false;                      ///< MUMPS是否已初始化
+    std::unique_ptr<MumpsContext> mumps_ctx_;  ///< MUMPS RAII 封装（管理完整生命周期）
+    std::unique_ptr<int[]> mumps_irn_;         ///< MUMPS 行索引数组（1-based，需保持有效）
+    std::unique_ptr<int[]> mumps_jcn_;         ///< MUMPS 列索引数组（1-based，需保持有效）
+    std::unique_ptr<double[]> mumps_a_;        ///< MUMPS 非零值数组（需保持有效）
 #endif
 
     /**

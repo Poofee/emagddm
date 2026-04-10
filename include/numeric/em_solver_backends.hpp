@@ -43,8 +43,8 @@
 // MUMPS 后端支持检测（在 CMakeLists.txt 中通过 target_compile_definitions 启用）
 #ifdef HAVE_MUMPS
     #define EM_SOLVER_HAS_MUMPS 1
-    // 包含 MUMPS 双精度 C 接口头文件（根据实际安装路径通过 CMake 的 target_include_directories 提供）
     #include "dmumps_c.h"
+    #include "zmumps_c.h"
 #else
     #define EM_SOLVER_HAS_MUMPS 0
 #endif

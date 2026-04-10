@@ -171,6 +171,90 @@ else()
 endif()
 
 # ============================================================
+# MUMPS 配置（可选，需预编译 MUMPS + OpenBLAS）
+# 使用 build_windows.ps1 预编译的静态库
+# ============================================================
+option(USE_MUMPS "启用 MUMPS 并行直接求解器后端" OFF)
+
+if(USE_MUMPS)
+    message(STATUS "Configuring MUMPS 5.8.2 (double precision, sequential MPI)...")
+
+    set(MUMPS_ROOT "${CMAKE_SOURCE_DIR}/lib/MUMPS")
+    set(OPENBLAS_ROOT "${CMAKE_SOURCE_DIR}/lib/OpenBLAS")
+
+    # 检查预编译库是否存在
+    set(MUMPS_LIBS
+        "${MUMPS_ROOT}/lib/mumps.lib"
+        "${MUMPS_ROOT}/lib/pord.lib"
+        "${MUMPS_ROOT}/lib/mpiseq.lib"
+    )
+    set(MUMPS_LIBS_FOUND TRUE)
+    foreach(_lib ${MUMPS_LIBS})
+        if(NOT EXISTS ${_lib})
+            message(WARNING "  MUMPS pre-built library not found: ${_lib}")
+            set(MUMPS_LIBS_FOUND FALSE)
+        endif()
+    endforeach()
+
+    # 检查 OpenBLAS
+    if(EXISTS "${OPENBLAS_ROOT}/lib/libopenblas.dll.a")
+        set(OPENBLAS_LIB "${OPENBLAS_ROOT}/lib/libopenblas.dll.a")
+        message(STATUS "  OpenBLAS found: ${OPENBLAS_LIB}")
+    elseif(EXISTS "${OPENBLAS_ROOT}/lib/libopenblas.a")
+        set(OPENBLAS_LIB "${OPENBLAS_ROOT}/lib/libopenblas.a")
+        message(STATUS "  OpenBLAS found: ${OPENBLAS_LIB}")
+    else()
+        message(WARNING "  OpenBLAS library not found in ${OPENBLAS_ROOT}/lib")
+        set(MUMPS_LIBS_FOUND FALSE)
+    endif()
+
+    if(MUMPS_LIBS_FOUND)
+        # 导入预编译的 MUMPS 静态库
+        add_library(mumps STATIC IMPORTED)
+        set_target_properties(mumps PROPERTIES
+            IMPORTED_LOCATION "${MUMPS_ROOT}/lib/mumps.lib"
+            INTERFACE_INCLUDE_DIRECTORIES "${MUMPS_ROOT}/include;${MUMPS_ROOT}/libseq"
+        )
+
+        add_library(pord STATIC IMPORTED)
+        set_target_properties(pord PROPERTIES
+            IMPORTED_LOCATION "${MUMPS_ROOT}/lib/pord.lib"
+            INTERFACE_INCLUDE_DIRECTORIES "${MUMPS_ROOT}/PORD/include"
+        )
+
+        add_library(mpiseq STATIC IMPORTED)
+        set_target_properties(mpiseq PROPERTIES
+            IMPORTED_LOCATION "${MUMPS_ROOT}/lib/mpiseq.lib"
+            INTERFACE_INCLUDE_DIRECTORIES "${MUMPS_ROOT}/libseq"
+        )
+
+        add_library(openblas STATIC IMPORTED)
+        set_target_properties(openblas PROPERTIES
+            IMPORTED_LOCATION "${OPENBLAS_LIB}"
+            INTERFACE_INCLUDE_DIRECTORIES "${OPENBLAS_ROOT}/include"
+        )
+
+        set(INTEL_FORTRAN_LIB_DIR "C:/Program Files (x86)/Intel/oneAPI/compiler/2023.2.0/windows/compiler/lib/intel64")
+        if(EXISTS ${INTEL_FORTRAN_LIB_DIR})
+            message(STATUS "  Intel Fortran runtime lib dir: ${INTEL_FORTRAN_LIB_DIR}")
+        else()
+            message(WARNING "  Intel Fortran runtime lib dir not found: ${INTEL_FORTRAN_LIB_DIR}")
+        endif()
+
+        set(MUMPS_AVAILABLE TRUE)
+        include_directories(${MUMPS_ROOT}/include)
+        include_directories(${MUMPS_ROOT}/libseq)
+        message(STATUS "  MUMPS configured successfully (pre-built libraries)")
+    else()
+        set(MUMPS_AVAILABLE FALSE)
+        message(WARNING "  MUMPS pre-built libraries not found. Run build_windows.ps1 first.")
+    endif()
+else()
+    set(MUMPS_AVAILABLE FALSE)
+    message(STATUS "MUMPS support disabled by user option")
+endif()
+
+# ============================================================
 # 包含项目子目录（在第三方库配置之后，确保编译定义可用）
 # ============================================================
 add_subdirectory(include)
