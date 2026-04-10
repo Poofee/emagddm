@@ -29,7 +29,7 @@
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     #include "em_direct_solvers.h"
 #else
     #include "em_direct_solvers.h"
@@ -157,7 +157,7 @@ double compute_error(const Eigen::VectorXd& computed, const std::vector<double>&
  * @test 测试SuperLU_MT后端的编译期和运行时可用性
  */
 TEST(SuperLUMTIntegrationTest, BackendAvailability) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     EXPECT_TRUE(DirectBackendManager::isBackendAvailable(DirectBackendType::SUPERLU));
     EXPECT_EQ(DirectBackendManager::getBackendName(DirectBackendType::SUPERLU), "SuperLU");
 
@@ -186,7 +186,7 @@ TEST(SuperLUMTIntegrationTest, BackendAvailability) {
  * 5. 验证解误差 < 1e-8
  */
 TEST(SuperLUMTIntegrationTest, SmallSPDSolve) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     auto A = build_small_spd_matrix();
     ASSERT_EQ(A.rows(), 5);
     ASSERT_EQ(A.cols(), 5);
@@ -223,7 +223,7 @@ TEST(SuperLUMTIntegrationTest, SmallSPDSolve) {
  * 精度要求与小规模测试一致。
  */
 TEST(SuperLUMTIntegrationTest, MediumSPDSolve) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     auto A = build_medium_spd_matrix();
     ASSERT_EQ(A.rows(), 20);
     ASSERT_EQ(A.cols(), 20);
@@ -264,7 +264,7 @@ TEST(SuperLUMTIntegrationTest, MediumSPDSolve) {
  * 多次solve()应返回一致且正确的结果。
  */
 TEST(SuperLUMTIntegrationTest, MultipleSolveConsistency) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     auto A = build_small_spd_matrix();
 
     std::vector<double> x_exact = {1.0, 2.0, 3.0, 4.0, 5.0};
@@ -314,7 +314,7 @@ TEST(SuperLUMTIntegrationTest, MultipleSolveConsistency) {
  * 两种后端的解向量差异应在机器精度范围内（< 1e-12）。
  */
 TEST(SuperLUMTIntegrationTest, CrossValidationWithEigen) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     auto A = build_medium_spd_matrix();
 
     std::vector<double> x_exact(20);
@@ -360,7 +360,7 @@ TEST(SuperLUMTIntegrationTest, CrossValidationWithEigen) {
  * 验证 clear() 能完全释放资源，之后可以正常重新 set_matrix() + solve()
  */
 TEST(SuperLUMTIntegrationTest, ClearAndReinitialize) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     auto A = build_small_spd_matrix();
 
     std::vector<double> x_exact = {1.0, 2.0, 3.0, 4.0, 5.0};
@@ -405,7 +405,7 @@ TEST(SuperLUMTIntegrationTest, ClearAndReinitialize) {
  * 验证 get_solver_name() 返回包含 "SuperLU" 的字符串
  */
 TEST(SuperLUMTIntegrationTest, SolverNameIdentification) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     SymmetricDirectSolver solver(DirectBackendType::SUPERLU);
     std::string name = solver.get_solver_name();
 

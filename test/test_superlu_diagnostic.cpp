@@ -35,7 +35,7 @@ CsrMatrix<double> build_tiny_matrix() {
     return csr;
 }
 
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
 
 TEST(SuperLUDiagnosticTest, StepByStepDecompose) {
     auto A = build_tiny_matrix();

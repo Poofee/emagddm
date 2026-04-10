@@ -15,7 +15,7 @@
 #include "em_direct_solvers.h"
 #include "logger_factory.hpp"
 
-#if EM_SOLVER_HAS_MUMPS
+#ifdef HAVE_MUMPS
 
 namespace {
 
@@ -53,7 +53,10 @@ MumpsContext::~MumpsContext() {
 MumpsContext::MumpsContext(MumpsContext&& other) noexcept
     : state_(other.state_), n_(other.n_),
       mumps_data_(other.mumps_data_),
-      rhs_buffer_(std::move(other.rhs_buffer_))
+      rhs_buffer_(std::move(other.rhs_buffer_)),
+      irn_storage_(std::move(other.irn_storage_)),
+      jcn_storage_(std::move(other.jcn_storage_)),
+      a_storage_(std::move(other.a_storage_))
 {
     other.state_ = State::UNINITIALIZED;
     other.n_ = 0;
@@ -67,6 +70,9 @@ MumpsContext& MumpsContext::operator=(MumpsContext&& other) noexcept {
         n_ = other.n_;
         mumps_data_ = other.mumps_data_;
         rhs_buffer_ = std::move(other.rhs_buffer_);
+        irn_storage_ = std::move(other.irn_storage_);
+        jcn_storage_ = std::move(other.jcn_storage_);
+        a_storage_ = std::move(other.a_storage_);
         other.state_ = State::UNINITIALIZED;
         other.n_ = 0;
         memset(&other.mumps_data_, 0, sizeof(other.mumps_data_));
@@ -208,6 +214,9 @@ void MumpsContext::reset() {
 
     memset(&mumps_data_, 0, sizeof(mumps_data_));
     rhs_buffer_.clear();
+    irn_storage_.clear();
+    jcn_storage_.clear();
+    a_storage_.clear();
     state_ = State::UNINITIALIZED;
     n_ = 0;
 }
@@ -231,6 +240,54 @@ void MumpsContext::configure_default_icntl() {
     mumps_data_.icntl[57] = 0;
 }
 
+/**
+ * @brief 从 CSR 矩阵设置数据并执行分解（便捷方法）
+ * @param csr CSR 格式稀疏矩阵（实数版本）
+ * @param sym 对称性标志：0=不对称，1=对称正定，2=一般对称
+ * @return 0 成功；<0 错误码
+ *
+ * @details 自动完成以下操作：
+ * 1. 若未初始化则自动调用 initialize(sym)
+ * 2. 将 CSR 格式转换为 COO 格式存储到内部数组（irn_storage_, jcn_storage_, a_storage_）
+ * 3. 调用 factorize() 执行分析+分解
+ */
+int MumpsContext::factorize_from_csr(const CsrMatrix<double>& csr, int sym) {
+    // 自动初始化（若尚未初始化）
+    if (state_ == State::UNINITIALIZED) {
+        if (!initialize(sym)) {
+            FEEM_ERROR("MumpsContext::factorize_from_csr - 自动初始化失败");
+            return -1;
+        }
+    }
+
+    // 提取 CSR 矩阵数据
+    const int n = csr.rows();
+    const auto& row_ptr = csr.get_row_ptr();
+    const auto& col_indices = csr.get_col_indices();
+    const auto& values = csr.get_values();
+
+    // CSR → COO 转换（MUMPS 使用 1-based 索引的 COO 格式）
+    irn_storage_.clear();
+    jcn_storage_.clear();
+    a_storage_.clear();
+
+    const int nz = row_ptr[n]; // 从 CSR 的 row_ptr 获取非零元总数
+    irn_storage_.reserve(nz);
+    jcn_storage_.reserve(nz);
+    a_storage_.reserve(nz);
+
+    for (int i = 0; i < n; ++i) {
+        for (int k = row_ptr[i]; k < row_ptr[i + 1]; ++k) {
+            irn_storage_.push_back(i + 1);           // 1-based 行索引
+            jcn_storage_.push_back(col_indices[k] + 1); // 1-based 列索引
+            a_storage_.push_back(values[k]);
+        }
+    }
+
+    // 调用 factorize()（使用内部存储的数组指针）
+    return factorize(n, nz, irn_storage_.data(), jcn_storage_.data(), a_storage_.data());
+}
+
 // ============================================================================
 // SymmetricDirectSolver MUMPS 后端
 // ============================================================================
@@ -240,9 +297,8 @@ void MumpsContext::configure_default_icntl() {
  * @return SolverResult 分解结果
  *
  * @details 通过 MumpsContext 封装执行完整的初始化和分解流程：
- * 1. 从Eigen稀疏矩阵提取COO格式数据（1-based irn/jcn/a）
- * 2. 调用 ctx.initialize() 初始化 MUMPS 实例
- * 3. 调用 ctx.factorize() 执行分析+分解（JOB=1 + JOB=2）
+ * 1. 将 Eigen 稀疏矩阵转换为 CsrMatrix 格式
+ * 2. 调用 ctx.factorize_from_csr() 自动完成 CSR→COO 转换和分解
  */
 SolverResult SymmetricDirectSolver::decompose_with_mumps() {
     FEEM_DEBUG("SymmetricDirectSolver::decompose_with_mumps - 开始MUMPS分解");
@@ -250,41 +306,29 @@ SolverResult SymmetricDirectSolver::decompose_with_mumps() {
     try {
         const int n = static_cast<int>(eigen_matrix_.rows());
         eigen_matrix_.makeCompressed();
-        const int nz = static_cast<int>(eigen_matrix_.nonZeros());
 
-        auto irn = std::make_unique<int[]>(nz);
-        auto jcn = std::make_unique<int[]>(nz);
-        auto a = std::make_unique<double[]>(nz);
-
-        int k = 0;
+        // 将 Eigen 矩阵转换为 CsrMatrix
+        CooMatrix<double> coo(n, n);
         for (int col = 0; col < n; ++col) {
             for (Eigen::SparseMatrix<double>::InnerIterator it(eigen_matrix_, col); it; ++it) {
-                irn[k] = static_cast<int>(it.row()) + 1;
-                jcn[k] = static_cast<int>(it.col()) + 1;
-                a[k] = it.value();
-                ++k;
+                coo.add_value(static_cast<int>(it.row()), static_cast<int>(it.col()), it.value());
             }
         }
 
+        CsrMatrix<double> csr(n, n);
+        csr.build_from_coo(coo);
+
         mumps_ctx_ = std::make_unique<MumpsContext>();
-        if (!mumps_ctx_->initialize(0)) {
-            mumps_ctx_.reset();
-            return create_error_result(SolverStatus::NUMERICAL_ERROR,
-                                       "MUMPS 初始化失败");
-        }
 
-        mumps_irn_ = std::move(irn);
-        mumps_jcn_ = std::move(jcn);
-        mumps_a_ = std::move(a);
-
-        int info = mumps_ctx_->factorize(n, nz, mumps_irn_.get(), mumps_jcn_.get(), mumps_a_.get());
+        // 使用便捷方法：自动处理初始化、CSR→COO转换、分解
+        int info = mumps_ctx_->factorize_from_csr(csr, 0);
         if (info != 0) {
             mumps_ctx_.reset();
             return create_error_result(SolverStatus::NUMERICAL_ERROR,
                                        "MUMPS 分解失败 (info=" + std::to_string(info) + ")");
         }
 
-        FEEM_DEBUG("decompose_with_mumps - MUMPS分解成功, 维度: {}x{}, 非零元数: {}", n, n, nz);
+        FEEM_DEBUG("decompose_with_mumps - MUMPS分解成功, 维度: {}x{}", n, n);
         return create_success_result(Eigen::VectorXd());
     } catch (const std::bad_alloc& e) {
         FEEM_ERROR("decompose_with_mumps - 内存分配失败: {}", e.what());
@@ -322,4 +366,4 @@ SolverResult SymmetricDirectSolver::solve_with_mumps(const Eigen::VectorXd& b) {
  */
 extern "C" void MAIN__() {}
 
-#endif // EM_SOLVER_HAS_MUMPS
+#endif // HAVE_MUMPS

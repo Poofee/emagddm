@@ -843,3 +843,46 @@ target_link_libraries(test_unified_solver
 )
 
 add_test(NAME test_unified_solver COMMAND test_unified_solver)
+
+# ==================== MUMPS 求解器完备测试套件 ====================
+# 全面验证 MUMPS 后端在实数和复数场景下的正确性：
+# 1. SymmetricDirectSolver + MUMPS 实数后端 (SPD 矩阵)
+# 2. GeneralDirectSolver + MUMPS 实数后端 (非对称矩阵)
+# 3. SymmetricDirectSolver + MUMPS 复数后端 (Hermitian 正定)
+# 4. SymmetricIndefiniteDirectSolver + MUMPS 复数后端 (一般 Hermitian)
+# 5. GeneralDirectSolver + MUMPS 复数后端 (非对称复数)
+# 6. Eigen vs MUMPS 后端一致性验证
+# 7. 错误处理（未设置矩阵、维度不匹配）
+add_executable(test_mumps_solver
+    test_mumps_solver.cpp
+)
+
+target_include_directories(test_mumps_solver
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/numeric
+        ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/lib/eigen
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+)
+
+target_link_libraries(test_mumps_solver
+    PRIVATE
+        numeric_lib
+        tool_lib
+        spdlog_lib
+        GTest::gtest
+        GTest::gtest_main
+)
+
+message(STATUS "  [TEST-CFG] Configuring test_mumps_solver...")
+if(MUMPS_AVAILABLE)
+    message(STATUS "  [TEST-CFG] -> Enabling HAVE_MUMPS for test_mumps_solver")
+    target_link_libraries(test_mumps_solver PRIVATE mumps_lib)
+    target_compile_definitions(test_mumps_solver PRIVATE HAVE_MUMPS)
+    target_include_directories(test_mumps_solver PRIVATE ${MUMPS_ROOT}/include ${MUMPS_ROOT}/libseq)
+else()
+    message(STATUS "  [TEST-CFG] -> MUMPS NOT available for test_mumps_solver (tests will be skipped)")
+endif()
+
+add_test(NAME test_mumps_solver COMMAND test_mumps_solver)

@@ -13,11 +13,11 @@
  * @code
  * #include "em_solver_backends.hpp"
  *
- * #if EM_SOLVER_HAS_SUPERLU
+ * #ifdef HAVE_SUPERLU
  *     // 使用 SuperLU_MT 特定代码
  * #endif
  *
- * #if EM_SOLVER_HAS_MUMPS
+ * #ifdef HAVE_MUMPS
  *     // 使用 MUMPS 特定代码
  * #endif
  * @endcode
@@ -31,20 +31,14 @@
 
 // SuperLU_MT 后端支持检测（在 CMakeLists.txt 中通过 target_compile_definitions 启用）
 #ifdef HAVE_SUPERLU
-    #define EM_SOLVER_HAS_SUPERLU 1
     // 包含 SuperLU_MT 双精度头文件（OpenMP 并行 LU 分解）
     // slu_mt_ddefs.h 内部会依次包含：slu_mt_machines.h, slu_mt_Cnames.h, supermatrix.h,
     // slu_mt_util.h, pxgstrf_synch.h，提供完整的 SuperLU_MT API 声明
     #include "slu_mt_ddefs.h"
-#else
-    #define EM_SOLVER_HAS_SUPERLU 0
 #endif
 
 // MUMPS 后端支持检测（在 CMakeLists.txt 中通过 target_compile_definitions 启用）
 #ifdef HAVE_MUMPS
-    #define EM_SOLVER_HAS_MUMPS 1
     #include "dmumps_c.h"
     #include "zmumps_c.h"
-#else
-    #define EM_SOLVER_HAS_MUMPS 0
 #endif

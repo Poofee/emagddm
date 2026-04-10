@@ -70,6 +70,12 @@ list(FILTER numeric_lib_SOURCES EXCLUDE REGEX "em_direct_solvers_mumps\\.cpp$")
 list(FILTER numeric_lib_SOURCES EXCLUDE REGEX "em_direct_solvers_mumps_complex\\.cpp$")
 list(FILTER numeric_lib_SOURCES EXCLUDE REGEX "em_direct_solvers_superlu\\.cpp$")
 
+# 新架构的后端源文件分离
+# MUMPS 后端放入 mumps_lib（隔离 Intel Fortran 运行时依赖）
+list(FILTER numeric_lib_SOURCES EXCLUDE REGEX "mumps_solver_backend\\.cpp$")
+# SuperLU 后端放入 superlu_lib
+list(FILTER numeric_lib_SOURCES EXCLUDE REGEX "superlu_solver_backend\\.cpp$")
+
 add_library(numeric_lib ${numeric_lib_SOURCES})
 
 target_include_directories(numeric_lib
@@ -91,6 +97,7 @@ target_link_libraries(numeric_lib
 if(SUPERLU_MT_AVAILABLE AND TARGET ${SUPERLU_MT_TARGET})
     add_library(superlu_lib STATIC
         "${CMAKE_CURRENT_SOURCE_DIR}/numeric/em_direct_solvers_superlu.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/numeric/superlu_solver_backend.cpp"  # 新架构：统一SuperLU后端
     )
 
     target_include_directories(superlu_lib
@@ -125,6 +132,7 @@ if(MUMPS_AVAILABLE)
     add_library(mumps_lib STATIC
         "${CMAKE_CURRENT_SOURCE_DIR}/numeric/em_direct_solvers_mumps.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/numeric/em_direct_solvers_mumps_complex.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/numeric/mumps_solver_backend.cpp"  # 新架构：统一MUMPS后端
     )
 
     target_include_directories(mumps_lib

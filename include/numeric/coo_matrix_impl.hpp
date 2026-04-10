@@ -18,18 +18,24 @@
 namespace numeric {
 
 template<typename T>
-CooMatrix<T>::CooMatrix() : rows_(0), cols_(0) {
+CooMatrix<T>::CooMatrix() : rows_(0), cols_(0),
+    eigen_real_cache_(0, 0),
+    eigen_complex_cache_(0, 0) {
 }
 
 template<typename T>
-CooMatrix<T>::CooMatrix(int rows, int cols) : rows_(rows), cols_(cols) {
+CooMatrix<T>::CooMatrix(int rows, int cols) : rows_(rows), cols_(cols),
+    eigen_real_cache_(rows, cols),
+    eigen_complex_cache_(rows, cols) {
     if (rows <= 0 || cols <= 0) {
         throw std::invalid_argument("矩阵尺寸必须为正数");
     }
 }
 
 template<typename T>
-CooMatrix<T>::CooMatrix(int rows, int cols, int capacity) : rows_(rows), cols_(cols) {
+CooMatrix<T>::CooMatrix(int rows, int cols, int capacity) : rows_(rows), cols_(cols),
+    eigen_real_cache_(rows, cols),
+    eigen_complex_cache_(rows, cols) {
     if (rows <= 0 || cols <= 0) {
         throw std::invalid_argument("矩阵尺寸必须为正数");
     }

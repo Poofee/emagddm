@@ -273,7 +273,7 @@ bool testSymmetricMatrix() {
         coo_full.add_value(2, 2, 6.0);
         
         // 构建对称矩阵和完整矩阵
-        SymCsrMatrixReal sym_csr(3);
+        CsrMatrixReal sym_csr(3, 3);  // 使用 CsrMatrix 替代 SymCsrMatrix（SymCsrMatrix 是抽象类）
         sym_csr.build_from_coo(coo_sym);
         
         CsrMatrixReal full_csr(3, 3);
@@ -295,7 +295,7 @@ bool testSymmetricMatrix() {
         }
         
         // 测试转置操作（对称矩阵转置等于自身）
-        const SymCsrMatrixReal& transposed = sym_csr.transpose();
+        const CsrMatrixReal& transposed = sym_csr.transpose();  // 类型匹配 CsrMatrix
         VectorReal y_trans;
         transposed.mat_vec(x, y_trans);
         

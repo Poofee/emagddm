@@ -202,20 +202,20 @@
   
   // SuperLU 后端支持（在CMakeLists.txt中通过 -DHAVE_SUPERLU 启用）
   #ifdef HAVE_SUPERLU
-    #define EM_SOLVER_HAS_SUPERLU 1
+    #define HAVE_SUPERLU 1
     // 包含SuperLU头文件
     #include "slu_ddefs.h"  // SuperLU Double Precision
   #else
-    #define EM_SOLVER_HAS_SUPERLU 0
+    #define HAVE_SUPERLU 0
   #endif
   
   // MUMPS 后端支持（在CMakeLists.txt中通过 -DHAVE_MUMPS 启用）
   #ifdef HAVE_MUMPS
-    #define EM_SOLVER_HAS_MUMPS 1
+    #define HAVE_MUMPS 1
     // 包含MUMPS头文件
     #include "dmumps_c.h"  // MUMPS Double Precision
   #else
-    #define EM_SOLVER_HAS_MUMPS 0
+    #define HAVE_MUMPS 0
   #endif
   ```
 - [ ] 3.5.2 文档说明如何在 CMakeLists.txt 中启用各后端

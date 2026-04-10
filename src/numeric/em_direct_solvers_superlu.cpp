@@ -15,7 +15,7 @@
 #include "em_direct_solvers.h"
 #include "logger_factory.hpp"
 
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
 
 namespace {
 
@@ -470,4 +470,4 @@ SolverResult SymmetricDirectSolver::solve_with_superlu(const Eigen::VectorXd& b)
 
 } // namespace numeric
 
-#endif // EM_SOLVER_HAS_SUPERLU
+#endif // HAVE_SUPERLU

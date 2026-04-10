@@ -62,17 +62,17 @@ SolverResult SymmetricDirectSolver::decompose() {
 ```cpp
 // em_solver_backends.hpp
 #ifdef HAVE_SUPERLU
-    #define EM_SOLVER_HAS_SUPERLU 1
+    #define HAVE_SUPERLU 1
     // SuperLU 头文件包含（暂不启用）
 #else
-    #define EM_SOLVER_HAS_SUPERLU 0
+    #define HAVE_SUPERLU 0
 #endif
 ```
 
 #### Scenario: 未来启用 SuperLU
 - **WHEN** 用户设置 CMake 选项 `USE_SUPERLU=ON`
 - **THEN** 编译时定义 `HAVE_SUPERLU` 宏
-- **THEN** `EM_SOLVER_HAS_SUPERLU` 为 1
+- **THEN** `HAVE_SUPERLU` 为 1
 - **THEN** SuperLU 后端代码被编译
 - **THEN** 用户可通过 `DirectBackendType::SUPERLU` 选择 SuperLU 后端
 

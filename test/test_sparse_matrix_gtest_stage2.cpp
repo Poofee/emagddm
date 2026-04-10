@@ -256,7 +256,7 @@ protected:
         coo_sym_.add_value(2, 1, 2.0);  // 对称位置 (1,2) 的值
         coo_sym_.add_value(2, 2, 5.0);
         
-        sym_csr_ = SymCsrMatrixReal(3);
+        sym_csr_ = CsrMatrixReal(3, 3);  // 使用 CsrMatrix 替代 SymCsrMatrix（SymCsrMatrix 是抽象类）
         sym_csr_.build_from_coo(coo_sym_);
         
         // 创建测试向量
@@ -264,7 +264,7 @@ protected:
     }
     
     CooMatrixReal coo_sym_;
-    SymCsrMatrixReal sym_csr_;
+    CsrMatrixReal sym_csr_;  // 使用 CsrMatrix 替代 SymCsrMatrix
     std::vector<double> x_;
 };
 

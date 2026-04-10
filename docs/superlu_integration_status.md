@@ -50,7 +50,7 @@ Windows pthread 兼容层需要实现完整的 POSIX 线程 API，包括：
 ```cpp
 // em_direct_solvers.cpp
 SolverResult SymmetricDirectSolver::decompose() {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     // 暂时禁用，等待 SuperLU 问题解决
     // return decompose_with_superlu();
 #endif

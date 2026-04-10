@@ -220,7 +220,7 @@ pdgssv(nprocs, A, perm_c, perm_r, L, U, B, &info);
 ```cpp
 // em_direct_solvers.cpp
 SolverResult SymmetricDirectSolver::decompose() {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     // 暂时禁用，等待修复
     // return decompose_with_superlu();
 #endif

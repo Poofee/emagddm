@@ -66,17 +66,17 @@
 #include <chrono>
 #include <cmath>
 
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
 // SuperLU头文件已在em_solver_backends.hpp中包含
 #endif
 
-#if EM_SOLVER_HAS_MUMPS
+#ifdef HAVE_MUMPS
 // MUMPS头文件已在em_solver_backends.hpp中包含
 #endif
 
 namespace numeric {
 
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
 
 /**
  * @class SuperluContext
@@ -274,9 +274,9 @@ private:
     void release_ac_matrix();
 };
 
-#endif  // EM_SOLVER_HAS_SUPERLU
+#endif  // HAVE_SUPERLU
 
-#if EM_SOLVER_HAS_MUMPS
+#ifdef HAVE_MUMPS
 
 /**
  * @class MumpsContext
@@ -423,15 +423,36 @@ private:
     DMUMPS_STRUC_C mumps_data_;
     std::vector<double> rhs_buffer_;
 
+    // 内部管理的矩阵数据数组（COO格式，1-based索引）
+    std::vector<int> irn_storage_;      ///< 行索引数组（1-based）
+    std::vector<int> jcn_storage_;      ///< 列索引数组（1-based）
+    std::vector<double> a_storage_;     ///< 非零值数组
+
     /**
      * @brief 配置 MUMPS 默认 ICNTL 控制参数
      */
     void configure_default_icntl();
+
+public:
+    /**
+     * @brief 从 CSR 矩阵设置数据并执行分解（便捷方法）
+     * @param csr CSR 格式稀疏矩阵（实数版本）
+     * @param sym 对称性标志：0=不对称，1=对称正定，2=一般对称
+     * @return 0 成功；<0 错误码
+     *
+     * @details 自动完成以下操作：
+     * 1. 若未初始化则自动调用 initialize(sym)
+     * 2. 将 CSR 格式转换为 COO 格式存储到内部数组
+     * 3. 调用 factorize() 执行分析+分解
+     *
+     * @note 此方法简化了使用流程，无需手动管理 COO 数组的生命周期
+     */
+    int factorize_from_csr(const CsrMatrix<double>& csr, int sym = 0);
 };
 
-#endif  // EM_SOLVER_HAS_MUMPS
+#endif  // HAVE_MUMPS
 
-#if EM_SOLVER_HAS_MUMPS
+#ifdef HAVE_MUMPS
 
 /**
  * @class ComplexMumpsContext
@@ -523,7 +544,28 @@ private:
     ZMUMPS_STRUC_C zmumps_data_;
     std::vector<ZMUMPS_COMPLEX> rhs_buffer_;
 
+    // 内部管理的复数矩阵数据数组（COO格式，1-based索引）
+    std::vector<int> irn_storage_;                ///< 行索引数组（1-based）
+    std::vector<int> jcn_storage_;                ///< 列索引数组（1-based）
+    std::vector<std::complex<double>> a_storage_; ///< 复数非零值数组
+
     void configure_default_icntl();
+
+public:
+    /**
+     * @brief 从 CSR 矩阵设置数据并执行复数分解（便捷方法）
+     * @param csr CSR 格式稀疏矩阵（复数版本）
+     * @param sym 对称性标志：0=不对称，1=Hermitian正定，2=一般Hermitian
+     * @return 0 成功；<0 错误码
+     *
+     * @details 自动完成以下操作：
+     * 1. 若未初始化则自动调用 initialize(sym)
+     * 2. 将 CSR 格式转换为 COO 格式存储到内部数组
+     * 3. 调用 factorize() 执行分析+分解
+     *
+     * @note 此方法简化了使用流程，无需手动管理 COO 数组的生命周期
+     */
+    int factorize_from_csr(const CsrMatrix<std::complex<double>>& csr, int sym = 0);
 };
 
 /**
@@ -543,7 +585,7 @@ inline Eigen::VectorXcd extract_complex(const SolverResult& result) {
     return x;
 }
 
-#endif  // EM_SOLVER_HAS_MUMPS
+#endif  // HAVE_MUMPS
 
 /**
  * @class DirectBackendManager
@@ -569,7 +611,7 @@ public:
      * @return true 后端可用（已编译进二进制文件）
      * @return false 后端不可用（未编译或未安装对应库）
      *
-     * @details 基于编译期宏EM_SOLVER_HAS_SUPERLU/EM_SOLVER_HAS_MUMPS进行判断，
+     * @details 基于编译期宏HAVE_SUPERLU/HAVE_MUMPS进行判断，
      *          Eigen后端始终返回true。
      */
     static bool isBackendAvailable(DirectBackendType type);
@@ -801,15 +843,13 @@ private:
     // 复数 Eigen 后端实例（SimplicialLLT: 稀疏复数Cholesky分解 LL^H）
     std::unique_ptr<Eigen::SimplicialLLT<Eigen::SparseMatrix<std::complex<double>>>> eigen_solver_complex_;
 
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     std::unique_ptr<SuperluContext> superlu_ctx_;  ///< SuperLU_MT RAII 封装（管理完整生命周期）
 #endif
 
-#if EM_SOLVER_HAS_MUMPS
-    std::unique_ptr<MumpsContext> mumps_ctx_;  ///< MUMPS RAII 封装（管理完整生命周期）
-    std::unique_ptr<int[]> mumps_irn_;         ///< MUMPS 行索引数组（1-based，需保持有效）
-    std::unique_ptr<int[]> mumps_jcn_;         ///< MUMPS 列索引数组（1-based，需保持有效）
-    std::unique_ptr<double[]> mumps_a_;        ///< MUMPS 非零值数组（需保持有效）
+#ifdef HAVE_MUMPS
+    std::unique_ptr<MumpsContext> mumps_ctx_;  ///< MUMPS RAII 封装（管理完整生命周期，含内部数据数组）
+    std::unique_ptr<ComplexMumpsContext> mumps_ctx_complex_;  ///< MUMPS 复数 RAII 封装（管理完整生命周期）
 #endif
 
     /**
@@ -852,7 +892,7 @@ private:
      */
     SolverResult solve_with_eigen_complex(const Eigen::VectorXcd& b);
 
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     /**
      * @brief 使用SuperLU后端执行分解（对称优化模式）
      * @return SolverResult 分解结果
@@ -867,7 +907,7 @@ private:
     SolverResult solve_with_superlu(const Eigen::VectorXd& b);
 #endif
 
-#if EM_SOLVER_HAS_MUMPS
+#ifdef HAVE_MUMPS
     /**
      * @brief 使用MUMPS后端执行分解（对称正定并行模式）
      * @return SolverResult 分解结果
@@ -880,6 +920,24 @@ private:
      * @return SolverResult 求解结果
      */
     SolverResult solve_with_mumps(const Eigen::VectorXd& b);
+
+    /**
+     * @brief 使用MUMPS复数后端执行分解（Hermitian正定并行模式）
+     * @return SolverResult 分解结果
+     *
+     * @details 通过 ComplexMumpsContext 封装执行完整的初始化和分解流程：
+     * 1. 将 Eigen 复数稀疏矩阵转换为 CsrMatrix 格式
+     * 2. 调用 ctx.factorize_from_csr() 自动完成 CSR→COO 转换和复数分解
+     * 3. sym=1: Hermitian 正定（适用于对称正定复数矩阵）
+     */
+    SolverResult decompose_with_mumps_complex();
+
+    /**
+     * @brief 使用MUMPS复数后端执行求解
+     * @param b 复数右端项向量
+     * @return SolverResult 求解结果（复数解存储在 x_complex 字段）
+     */
+    SolverResult solve_with_mumps_complex(const Eigen::VectorXcd& b);
 #endif
 
     /**
@@ -1038,6 +1096,10 @@ private:
     // 复数 Eigen LDL^H求解器（支持2x2 pivot，处理复数不定矩阵）
     std::unique_ptr<Eigen::SimplicialLDLT<Eigen::SparseMatrix<std::complex<double>>>> eigen_solver_complex_;
 
+#ifdef HAVE_MUMPS
+    std::unique_ptr<ComplexMumpsContext> mumps_ctx_complex_;  ///< MUMPS 复数 RAII 封装（管理完整生命周期）
+#endif
+
     DirectBackendType fallback_to_eigen_if_unavailable(DirectBackendType requested);
     SolverResult decompose_with_eigen();
     SolverResult solve_with_eigen(const Eigen::VectorXd& b);
@@ -1060,6 +1122,26 @@ private:
      * @details 利用缓存的复数LDL^H因子执行前代和回代。
      */
     SolverResult solve_with_eigen_complex(const Eigen::VectorXcd& b);
+
+#ifdef HAVE_MUMPS
+    /**
+     * @brief 使用MUMPS复数后端执行分解（一般Hermitian并行模式）
+     * @return SolverResult 分解结果
+     *
+     * @details 通过 ComplexMumpsContext 封装执行完整的初始化和分解流程：
+     * 1. 将 Eigen 复数稀疏矩阵转换为 CsrMatrix 格式
+     * 2. 调用 ctx.factorize_from_csr() 自动完成 CSR→COO 转换和复数分解
+     * 3. sym=2: 一般 Hermitian（适用于对称不定复数矩阵）
+     */
+    SolverResult decompose_with_mumps_complex();
+
+    /**
+     * @brief 使用MUMPS复数后端执行求解
+     * @param b 复数右端项向量
+     * @return SolverResult 求解结果（复数解存储在 x_complex 字段）
+     */
+    SolverResult solve_with_mumps_complex(const Eigen::VectorXcd& b);
+#endif
 };
 
 /**
@@ -1203,6 +1285,10 @@ private:
     // 复数 Eigen LU求解器（带部分选主元）
     std::unique_ptr<Eigen::SparseLU<Eigen::SparseMatrix<std::complex<double>>>> eigen_solver_complex_;
 
+#ifdef HAVE_MUMPS
+    std::unique_ptr<ComplexMumpsContext> mumps_ctx_complex_;  ///< MUMPS 复数 RAII 封装（管理完整生命周期）
+#endif
+
     DirectBackendType fallback_to_eigen_if_unavailable(DirectBackendType requested);
     SolverResult decompose_with_eigen();
     SolverResult solve_with_eigen(const Eigen::VectorXd& b);
@@ -1224,6 +1310,26 @@ private:
      * @details 利用缓存的复数P、L、U因子执行前代和回代。
      */
     SolverResult solve_with_eigen_complex(const Eigen::VectorXcd& b);
+
+#ifdef HAVE_MUMPS
+    /**
+     * @brief 使用MUMPS复数后端执行分解（非对称并行模式）
+     * @return SolverResult 分解结果
+     *
+     * @details 通过 ComplexMumpsContext 封装执行完整的初始化和分解流程：
+     * 1. 将 Eigen 复数稀疏矩阵转换为 CsrMatrix 格式
+     * 2. 调用 ctx.factorize_from_csr() 自动完成 CSR→COO 转换和复数分解
+     * 3. sym=0: 非对称（适用于一般复数矩阵）
+     */
+    SolverResult decompose_with_mumps_complex();
+
+    /**
+     * @brief 使用MUMPS复数后端执行求解
+     * @param b 复数右端项向量
+     * @return SolverResult 求解结果（复数解存储在 x_complex 字段）
+     */
+    SolverResult solve_with_mumps_complex(const Eigen::VectorXcd& b);
+#endif
 
     /**
      * @brief 估算矩阵条件数（基于LU分解的U因子）

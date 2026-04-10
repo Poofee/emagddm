@@ -6,7 +6,7 @@
  *
  * @par 实现架构：
  * - 策略模式：通过backend_type_成员变量在运行时选择求解后端
- * - 条件编译：#if EM_SOLVER_HAS_SUPERLU / #if EM_SOLVER_HAS_MUMPS 控制第三方后端
+ * - 条件编译：#ifdef HAVE_SUPERLU / #ifdef HAVE_MUMPS 控制第三方后端
  * - 瞬态优化：set_matrix()分解一次并缓存，solve()多次复用分解因子
  * - 优雅降级：请求的后端不可用时自动回退到Eigen并记录WARNING日志
  *
@@ -75,13 +75,13 @@ bool DirectBackendManager::isBackendAvailable(DirectBackendType type) {
         case DirectBackendType::EIGEN:
             return true;  // Eigen始终可用（作为默认回退方案）
         case DirectBackendType::SUPERLU:
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
             return true;
 #else
             return false;
 #endif
         case DirectBackendType::MUMPS:
-#if EM_SOLVER_HAS_MUMPS
+#ifdef HAVE_MUMPS
             return true;
 #else
             return false;
@@ -109,11 +109,11 @@ std::vector<DirectBackendType> DirectBackendManager::getAvailableBackends() {
     std::vector<DirectBackendType> backends;
     backends.push_back(DirectBackendType::EIGEN);  // Eigen始终可用
 
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     backends.push_back(DirectBackendType::SUPERLU);
 #endif
 
-#if EM_SOLVER_HAS_MUMPS
+#ifdef HAVE_MUMPS
     backends.push_back(DirectBackendType::MUMPS);
 #endif
 
@@ -196,12 +196,12 @@ void SymmetricDirectSolver::set_matrix(const CsrMatrix<double>& A) {
         case DirectBackendType::EIGEN:
             decompose_result = decompose_with_eigen();
             break;
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
         case DirectBackendType::SUPERLU:
             decompose_result = decompose_with_superlu();
             break;
 #endif
-#if EM_SOLVER_HAS_MUMPS
+#ifdef HAVE_MUMPS
         case DirectBackendType::MUMPS:
             decompose_result = decompose_with_mumps();
             break;
@@ -253,12 +253,12 @@ SolverResult SymmetricDirectSolver::solve(const Eigen::VectorXd& b) {
         case DirectBackendType::EIGEN:
             result = solve_with_eigen(b);
             break;
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
         case DirectBackendType::SUPERLU:
             result = solve_with_superlu(b);
             break;
 #endif
-#if EM_SOLVER_HAS_MUMPS
+#ifdef HAVE_MUMPS
         case DirectBackendType::MUMPS:
             result = solve_with_mumps(b);
             break;
@@ -316,8 +316,23 @@ void SymmetricDirectSolver::set_matrix(const CsrMatrix<std::complex<double>>& A)
         return;
     }
 
-    // 步骤3：执行复数Cholesky分解
-    SolverResult decompose_result = decompose_with_eigen_complex();
+    // 步骤3：根据当前后端执行复数Cholesky分解
+    SolverResult decompose_result;
+
+    switch (backend_type_) {
+        case DirectBackendType::EIGEN:
+            decompose_result = decompose_with_eigen_complex();
+            break;
+#ifdef HAVE_MUMPS
+        case DirectBackendType::MUMPS:
+            decompose_result = decompose_with_mumps_complex();
+            break;
+#endif
+        default:
+            decompose_result = create_error_result(SolverStatus::NUMERICAL_ERROR,
+                                                   "未知的后端类型");
+            break;
+    }
 
     if (decompose_result.status != SolverStatus::SUCCESS) {
         FEEM_ERROR("SymmetricDirectSolver::set_matrix(复数) - 分解失败: {}",
@@ -330,8 +345,9 @@ void SymmetricDirectSolver::set_matrix(const CsrMatrix<std::complex<double>>& A)
     auto end_time = std::chrono::high_resolution_clock::now();
     double duration_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
 
-    FEEM_INFO("SymmetricDirectSolver::set_matrix(复数) 完成, 维度: {}x{}, 后端: Eigen, 耗时: {:.3f} ms",
-              eigen_matrix_complex_.rows(), eigen_matrix_complex_.cols(), duration_ms);
+    FEEM_INFO("SymmetricDirectSolver::set_matrix(复数) 完成, 维度: {}x{}, 后端: {}, 耗时: {:.3f} ms",
+              eigen_matrix_complex_.rows(), eigen_matrix_complex_.cols(),
+              DirectBackendManager::getBackendName(backend_type_), duration_ms);
 }
 
 SolverResult SymmetricDirectSolver::solve(const Eigen::VectorXcd& b) {
@@ -352,8 +368,23 @@ SolverResult SymmetricDirectSolver::solve(const Eigen::VectorXcd& b) {
                                    "右端项向量长度与复数矩阵维度不匹配");
     }
 
-    // 执行复数求解
-    SolverResult result = solve_with_eigen_complex(b);
+    // 根据当前后端执行复数求解
+    SolverResult result;
+
+    switch (backend_type_) {
+        case DirectBackendType::EIGEN:
+            result = solve_with_eigen_complex(b);
+            break;
+#ifdef HAVE_MUMPS
+        case DirectBackendType::MUMPS:
+            result = solve_with_mumps_complex(b);
+            break;
+#endif
+        default:
+            result = create_error_result(SolverStatus::NUMERICAL_ERROR,
+                                         "未知的后端类型");
+            break;
+    }
 
     // 计算残差范数用于质量评估（仅在成功时计算）
     if (result.status == SolverStatus::SUCCESS) {
@@ -390,7 +421,7 @@ void SymmetricDirectSolver::clear() {
     eigen_matrix_complex_ = Eigen::SparseMatrix<std::complex<double>>();  // 释放复数矩阵内存
     matrix_set_complex_ = false;
 
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     // 释放 SuperLU_MT 资源（RAII 封装自动管理所有资源释放）
     if (superlu_ctx_) {
         superlu_ctx_->reset();
@@ -398,15 +429,17 @@ void SymmetricDirectSolver::clear() {
     }
 #endif
 
-#if EM_SOLVER_HAS_MUMPS
+#ifdef HAVE_MUMPS
     // 释放 MUMPS 资源（RAII 封装自动管理所有资源释放）
     if (mumps_ctx_) {
         mumps_ctx_->reset();
         mumps_ctx_.reset();
     }
-    mumps_irn_.reset();
-    mumps_jcn_.reset();
-    mumps_a_.reset();
+    // 释放 MUMPS 复数资源（RAII 封装自动管理所有资源释放）
+    if (mumps_ctx_complex_) {
+        mumps_ctx_complex_->reset();
+        mumps_ctx_complex_.reset();
+    }
 #endif
 
     matrix_set_ = false;
@@ -707,8 +740,23 @@ void SymmetricIndefiniteDirectSolver::set_matrix(const CsrMatrix<std::complex<do
         return;
     }
 
-    // 执行复数LDL^H分解
-    SolverResult decompose_result = decompose_with_eigen_complex();
+    // 执行复数LDL^H分解（根据后端类型选择）
+    SolverResult decompose_result;
+
+    switch (backend_type_) {
+        case DirectBackendType::EIGEN:
+            decompose_result = decompose_with_eigen_complex();
+            break;
+#ifdef HAVE_MUMPS
+        case DirectBackendType::MUMPS:
+            decompose_result = decompose_with_mumps_complex();
+            break;
+#endif
+        default:
+            decompose_result = create_error_result(SolverStatus::NUMERICAL_ERROR,
+                                                   "未知的后端类型");
+            break;
+    }
 
     if (decompose_result.status != SolverStatus::SUCCESS) {
         FEEM_ERROR("SymmetricIndefiniteDirectSolver::set_matrix(复数) - LDL^H分解失败: {}",
@@ -721,8 +769,9 @@ void SymmetricIndefiniteDirectSolver::set_matrix(const CsrMatrix<std::complex<do
     auto end_time = std::chrono::high_resolution_clock::now();
     double duration_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
 
-    FEEM_INFO("SymmetricIndefiniteDirectSolver::set_matrix(复数) 完成, 维度: {}x{}, 耗时: {:.3f} ms",
-              eigen_matrix_complex_.rows(), eigen_matrix_complex_.cols(), duration_ms);
+    FEEM_INFO("SymmetricIndefiniteDirectSolver::set_matrix(复数) 完成, 维度: {}x{}, 后端: {}, 耗时: {:.3f} ms",
+              eigen_matrix_complex_.rows(), eigen_matrix_complex_.cols(),
+              DirectBackendManager::getBackendName(backend_type_), duration_ms);
 }
 
 SolverResult SymmetricIndefiniteDirectSolver::solve(const Eigen::VectorXcd& b) {
@@ -740,7 +789,23 @@ SolverResult SymmetricIndefiniteDirectSolver::solve(const Eigen::VectorXcd& b) {
                                    "右端项向量长度与复数矩阵维度不匹配");
     }
 
-    SolverResult result = solve_with_eigen_complex(b);
+    // 根据当前后端执行复数求解
+    SolverResult result;
+
+    switch (backend_type_) {
+        case DirectBackendType::EIGEN:
+            result = solve_with_eigen_complex(b);
+            break;
+#ifdef HAVE_MUMPS
+        case DirectBackendType::MUMPS:
+            result = solve_with_mumps_complex(b);
+            break;
+#endif
+        default:
+            result = create_error_result(SolverStatus::NUMERICAL_ERROR,
+                                         "未知的后端类型");
+            break;
+    }
 
     if (result.status == SolverStatus::SUCCESS) {
         Eigen::VectorXcd residual = eigen_matrix_complex_ * result.x_complex - b;
@@ -770,6 +835,14 @@ void SymmetricIndefiniteDirectSolver::clear() {
     eigen_solver_complex_.reset();
     eigen_matrix_complex_ = Eigen::SparseMatrix<std::complex<double>>();
     matrix_set_complex_ = false;
+
+#ifdef HAVE_MUMPS
+    // 释放 MUMPS 复数资源（RAII 封装自动管理所有资源释放）
+    if (mumps_ctx_complex_) {
+        mumps_ctx_complex_->reset();
+        mumps_ctx_complex_.reset();
+    }
+#endif
 
     matrix_set_ = false;
     regularization_applied_ = false;
@@ -1026,8 +1099,23 @@ void GeneralDirectSolver::set_matrix(const CsrMatrix<std::complex<double>>& A) {
         return;
     }
 
-    // 执行复数LU分解（带部分选主元）
-    SolverResult decompose_result = decompose_with_eigen_complex();
+    // 执行复数LU分解（根据后端类型选择）
+    SolverResult decompose_result;
+
+    switch (backend_type_) {
+        case DirectBackendType::EIGEN:
+            decompose_result = decompose_with_eigen_complex();
+            break;
+#ifdef HAVE_MUMPS
+        case DirectBackendType::MUMPS:
+            decompose_result = decompose_with_mumps_complex();
+            break;
+#endif
+        default:
+            decompose_result = create_error_result(SolverStatus::NUMERICAL_ERROR,
+                                                   "未知的后端类型");
+            break;
+    }
 
     if (decompose_result.status != SolverStatus::SUCCESS) {
         FEEM_ERROR("GeneralDirectSolver::set_matrix(复数) - LU分解失败: {}",
@@ -1040,8 +1128,9 @@ void GeneralDirectSolver::set_matrix(const CsrMatrix<std::complex<double>>& A) {
     auto end_time = std::chrono::high_resolution_clock::now();
     double duration_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
 
-    FEEM_INFO("GeneralDirectSolver::set_matrix(复数) 完成, 维度: {}x{}, 耗时: {:.3f} ms",
-              eigen_matrix_complex_.rows(), eigen_matrix_complex_.cols(), duration_ms);
+    FEEM_INFO("GeneralDirectSolver::set_matrix(复数) 完成, 维度: {}x{}, 后端: {}, 耗时: {:.3f} ms",
+              eigen_matrix_complex_.rows(), eigen_matrix_complex_.cols(),
+              DirectBackendManager::getBackendName(backend_type_), duration_ms);
 }
 
 SolverResult GeneralDirectSolver::solve(const Eigen::VectorXcd& b) {
@@ -1059,7 +1148,23 @@ SolverResult GeneralDirectSolver::solve(const Eigen::VectorXcd& b) {
                                    "右端项向量长度与复数矩阵维度不匹配");
     }
 
-    SolverResult result = solve_with_eigen_complex(b);
+    // 根据当前后端执行复数求解
+    SolverResult result;
+
+    switch (backend_type_) {
+        case DirectBackendType::EIGEN:
+            result = solve_with_eigen_complex(b);
+            break;
+#ifdef HAVE_MUMPS
+        case DirectBackendType::MUMPS:
+            result = solve_with_mumps_complex(b);
+            break;
+#endif
+        default:
+            result = create_error_result(SolverStatus::NUMERICAL_ERROR,
+                                         "未知的后端类型");
+            break;
+    }
 
     if (result.status == SolverStatus::SUCCESS) {
         Eigen::VectorXcd residual = eigen_matrix_complex_ * result.x_complex - b;
@@ -1087,6 +1192,14 @@ void GeneralDirectSolver::clear() {
     eigen_solver_complex_.reset();
     eigen_matrix_complex_ = Eigen::SparseMatrix<std::complex<double>>();
     matrix_set_complex_ = false;
+
+#ifdef HAVE_MUMPS
+    // 释放 MUMPS 复数资源（RAII 封装自动管理所有资源释放）
+    if (mumps_ctx_complex_) {
+        mumps_ctx_complex_->reset();
+        mumps_ctx_complex_.reset();
+    }
+#endif
 
     matrix_set_ = false;
 }

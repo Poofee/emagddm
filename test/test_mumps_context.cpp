@@ -31,7 +31,7 @@
 #include "em_direct_solvers.h"
 #include "logger_factory.hpp"
 
-#if !EM_SOLVER_HAS_MUMPS
+#if !HAVE_MUMPS
     #error "此测试需要 MUMPS 支持，请使用 -DUSE_MUMPS=ON 编译"
 #endif
 

@@ -33,7 +33,7 @@
   - [ ] 替换 `#include "slu_mt_ddefs.h"` 为 `#include "superlu_defs.h"`
   - [ ] 添加 `#include "superlu_enum_consts.h"`
   - [ ] 更新注释说明使用 SuperLU_DIST
-  - [ ] 保持 `EM_SOLVER_HAS_SUPERLU` 宏定义逻辑不变
+  - [ ] 保持 `HAVE_SUPERLU` 宏定义逻辑不变
 
 - [ ] **Task 6: 修改 em_direct_solvers.h**
   - [ ] 检查 SuperMatrix 等类型定义是否兼容

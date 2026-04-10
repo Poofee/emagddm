@@ -27,7 +27,7 @@
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     #include "em_direct_solvers.h"
 #else
     #include "em_direct_solvers.h"
@@ -132,7 +132,7 @@ CsrMatrix<double> generate_spd_csr_matrix(int n, double density = 0.1) {
 // ==================== 模块 1: 构造、析构与 RAII ====================
 
 TEST(SuperluContextTest, DefaultConstruction) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     SuperluContext ctx;
     EXPECT_FALSE(ctx.is_initialized());
     EXPECT_FALSE(ctx.is_factored());
@@ -144,7 +144,7 @@ TEST(SuperluContextTest, DefaultConstruction) {
 }
 
 TEST(SuperluContextTest, DestructionNoLeak) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     // 多次创建销毁不应泄漏或崩溃
     for (int i = 0; i < 5; ++i) {
         SuperluContext ctx;
@@ -162,7 +162,7 @@ TEST(SuperluContextTest, DestructionNoLeak) {
 // ==================== 模块 2: initialize() 测试 ====================
 
 TEST(SuperluContextTest, InitializeValidMatrix) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     SuperluContext ctx;
     double* nzval = nullptr; int_t* rowind = nullptr; int_t* colptr = nullptr;
     int_t nnz = generate_spd_csc_data(20, 0.15, nzval, rowind, colptr);
@@ -181,7 +181,7 @@ TEST(SuperluContextTest, InitializeValidMatrix) {
 }
 
 TEST(SuperluContextTest, InitializeInvalidParameters) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     SuperluContext ctx;
     double* nzval = doubleMalloc(1);
     int_t* rowind = intMalloc(1);
@@ -206,7 +206,7 @@ TEST(SuperluContextTest, InitializeInvalidParameters) {
 }
 
 TEST(SuperluContextTest, ReinitializeAfterReset) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     SuperluContext ctx;
     double* nzval = nullptr; int_t* rowind = nullptr; int_t* colptr = nullptr;
 
@@ -232,7 +232,7 @@ TEST(SuperluContextTest, ReinitializeAfterReset) {
 // ==================== 模块 3: factorize() 测试 ====================
 
 TEST(SuperluContextTest, FactorizeSuccess) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     SuperluContext ctx;
     double* nzval = nullptr; int_t* rowind = nullptr; int_t* colptr = nullptr;
     int_t nnz = generate_spd_csc_data(20, 0.15, nzval, rowind, colptr);
@@ -249,7 +249,7 @@ TEST(SuperluContextTest, FactorizeSuccess) {
 }
 
 TEST(SuperluContextTest, FactorizeStateGuard) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     SuperluContext ctx;
     // 未初始化就分解应返回错误
     int_t info = ctx.factorize(1);
@@ -263,7 +263,7 @@ TEST(SuperluContextTest, FactorizeStateGuard) {
 }
 
 TEST(SuperluContextTest, FactorizeMultipleNprocs) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     SuperluContext ctx;
     double* nzval = nullptr; int_t* rowind = nullptr; int_t* colptr = nullptr;
     int_t nnz = generate_spd_csc_data(30, 0.12, nzval, rowind, colptr);
@@ -289,7 +289,7 @@ TEST(SuperluContextTest, FactorizeMultipleNprocs) {
 // ==================== 模块 4: solve() 测试 ====================
 
 TEST(SuperluContextTest, SolveBasicAccuracy) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     const int n = 20;
     SuperluContext ctx;
     double* nzval = nullptr; int_t* rowind = nullptr; int_t* colptr = nullptr;
@@ -323,7 +323,7 @@ TEST(SuperluContextTest, SolveBasicAccuracy) {
 }
 
 TEST(SuperluContextTest, SolveMultipleRHS) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     const int n = 30;
     SuperluContext ctx;
     double* nzval = nullptr; int_t* rowind = nullptr; int_t* colptr = nullptr;
@@ -361,7 +361,7 @@ TEST(SuperluContextTest, SolveMultipleRHS) {
 }
 
 TEST(SuperluContextTest, SolveWithoutFactorize) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     SuperluContext ctx;
     double* nzval = nullptr; int_t* rowind = nullptr; int_t* colptr = nullptr;
     int_t nnz = generate_spd_csc_data(10, 0.2, nzval, rowind, colptr);
@@ -381,7 +381,7 @@ TEST(SuperluContextTest, SolveWithoutFactorize) {
 // ==================== 模块 5: reset() 与生命周期 ====================
 
 TEST(SuperluContextTest, ResetFullCycle) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     SuperluContext ctx;
     double* nzval = nullptr; int_t* rowind = nullptr; int_t* colptr = nullptr;
     int_t nnz = generate_spd_csc_data(15, 0.18, nzval, rowind, colptr);
@@ -414,7 +414,7 @@ TEST(SuperluContextTest, ResetFullCycle) {
 }
 
 TEST(SuperluContextTest, ResetIdempotent) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     SuperluContext ctx;
     // 对未初始化的对象多次 reset 不应崩溃
     ctx.reset();
@@ -431,7 +431,7 @@ TEST(SuperluContextTest, ResetIdempotent) {
 // ==================== 模块 6: 移动语义 ====================
 
 TEST(SuperluContextTest, MoveConstructor) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     SuperluContext src;
     double* nzval = nullptr; int_t* rowind = nullptr; int_t* colptr = nullptr;
     int_t nnz = generate_spd_csc_data(15, 0.18, nzval, rowind, colptr);
@@ -461,7 +461,7 @@ TEST(SuperluContextTest, MoveConstructor) {
 }
 
 TEST(SuperluContextTest, MoveAssignment) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     SuperluContext src, dst;
     double* nzval = nullptr; int_t* rowind = nullptr; int_t* colptr = nullptr;
     int_t nnz = generate_spd_csc_data(12, 0.2, nzval, rowind, colptr);
@@ -487,7 +487,7 @@ TEST(SuperluContextTest, MoveAssignment) {
 }
 
 TEST(SuperluContextTest, SelfMoveAssignment) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     SuperluContext ctx;
     double* nzval = nullptr; int_t* rowind = nullptr; int_t* colptr = nullptr;
     int_t nnz = generate_spd_csc_data(10, 0.2, nzval, rowind, colptr);
@@ -506,7 +506,7 @@ TEST(SuperluContextTest, SelfMoveAssignment) {
 // ==================== 模块 7: 状态机转换 ====================
 
 TEST(SuperluContextTest, StateMachineTransitions) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     SuperluContext ctx;
     double* nzval = nullptr; int_t* rowind = nullptr; int_t* colptr = nullptr;
     int_t nnz = generate_spd_csc_data(10, 0.2, nzval, rowind, colptr);
@@ -535,7 +535,7 @@ TEST(SuperluContextTest, StateMachineTransitions) {
 // ==================== 模块 8: 不同规模矩阵 ====================
 
 TEST(SuperluContextTest, SmallMatrix5x5) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     const int n = 5;
     SuperluContext ctx;
     double* nzval = nullptr; int_t* rowind = nullptr; int_t* colptr = nullptr;
@@ -565,7 +565,7 @@ TEST(SuperluContextTest, SmallMatrix5x5) {
 }
 
 TEST(SuperluContextTest, MediumMatrix100x100) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     const int n = 100;
     SuperluContext ctx;
     double* nzval = nullptr; int_t* rowind = nullptr; int_t* colptr = nullptr;
@@ -595,7 +595,7 @@ TEST(SuperluContextTest, MediumMatrix100x100) {
 }
 
 TEST(SuperluContextTest, LargeMatrix500x500) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     const int n = 500;
     SuperluContext ctx;
     double* nzval = nullptr; int_t* rowind = nullptr; int_t* colptr = nullptr;
@@ -634,7 +634,7 @@ TEST(SuperluContextTest, LargeMatrix500x500) {
 // ==================== 模块 9: 内存安全压力测试 ====================
 
 TEST(SuperluContextTest, MemorySafetyRepeatedFactorSolve) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     // 反复分解-求解-重置循环，检测内存泄漏
     for (int cycle = 0; cycle < 10; ++cycle) {
         SuperluContext ctx;
@@ -662,7 +662,7 @@ TEST(SuperluContextTest, MemorySafetyRepeatedFactorSolve) {
 // ==================== 模块 10: SymmetricDirectSolver 集成测试 ====================
 
 TEST(SuperluContextTest, SymmetricDirectSolverIntegration) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     // 通过 SymmetricDirectSolver 使用 SuperLU 后端的端到端测试
     int n = 50;
     CsrMatrix<double> A = generate_spd_csr_matrix(n, 0.08);

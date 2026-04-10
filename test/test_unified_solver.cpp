@@ -34,7 +34,7 @@
 #include "coo_matrix.hpp"
 #include "csr_matrix.hpp"
 #include "vector.hpp"
-#include "logger_factory.hpp"
+#include "tool/logger_factory.hpp"  // 日志宏（FEEM_INFO/FEEM_ERROR/FEEM_DEBUG）
 
 using namespace numeric;
 using namespace emag;
@@ -125,7 +125,7 @@ CsrMatrix<std::complex<double>> build_4x4_complex_matrix() {
     Eigen::SparseMatrix<std::complex<double>> A_sparse = A_dense.sparseView();
     A_sparse.makeCompressed();
 
-    return SparseConverter::from_eigen(A_sparse);
+    return SparseConverter::from_eigen_complex(A_sparse);
 }
 
 
@@ -306,7 +306,7 @@ TEST(ComplexGeneralDirectSolver, ComplexMatrix_LUSolve) {
     x_expected(3) = std::complex<double>(4.0, 0.0);
 
     // 计算右端项 b = A * x_expected
-    auto A_eigen = SparseConverter::to_eigen(A_complex);
+    auto A_eigen = SparseConverter::to_eigen_complex(A_complex);
     Eigen::VectorXcd b_complex = A_eigen * x_expected;
 
     // 创建通用直接求解器（LU分解）
@@ -531,7 +531,7 @@ TEST(ComplexIterativeSolvers, Complex_CGAndBiCGSTAB_Accuracy) {
     x_expected(2) = std::complex<double>(3.0, 2.0);
     x_expected(3) = std::complex<double>(4.0, -1.0);
 
-    auto A_eigen = SparseConverter::to_eigen(A_complex);
+    auto A_eigen = SparseConverter::to_eigen_complex(A_complex);
     Eigen::VectorXcd b = A_eigen * x_expected;
 
     // 直接求解器参考解

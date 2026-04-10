@@ -70,7 +70,10 @@
 #pragma once
 
 #include "em_linear_solver.h"
-#include "em_direct_solvers.h"
+#include "unified_direct_solver.h"
+#include "eigen_solver_backends.h"
+#include "mumps_solver_backend.h"
+#include "superlu_solver_backend.h"
 #include "em_iterative_solvers.h"
 #include "matrix_attribute.hpp"
 #include "logger_factory.hpp"
@@ -128,6 +131,7 @@ public:
      * @details 定义所有可由工厂创建的求解器类型，每种类型对应一个具体的求解器实现类
      */
     enum class SolverType {
+        // ===== Eigen 后端（默认） =====
         SYMMETRIC_DIRECT,       ///< 对称正定直接求解器（Eigen::SimplicialLLT Cholesky分解）
                                 ///< 适用场景：静电场刚度矩阵、静磁场SPD系统、热传导方程
                                 ///< 数值特性：无条件稳定，时间复杂度O(n³)分解+O(n²)求解
@@ -143,6 +147,23 @@ public:
                                 ///< 数值特性：带部分选主元PA=LU，数值稳定性好
                                 ///< 性能考虑：fill-in通常高于Cholesky/LDL^T
 
+        // ===== MUMPS 后端（可选，需编译期启用） =====
+        MUMPS_SYMMETRIC_DIRECT,     ///< MUMPS对称正定直接求解器（MPI并行Cholesky分解）
+                                    ///< 适用场景：大规模SPD系统（>10万DOF）、分布式计算
+                                    ///< 依赖库：MUMPS 5.8+ + MPI
+
+        MUMPS_SYMMETRIC_INDEFINITE, ///< MUMPS对称不定直接求解器（MPI并行LDL^T分解）
+                                    ///< 适用场景：大规模Saddle Point问题、分布式计算
+
+        MUMPS_GENERAL_DIRECT,       ///< MUMPS通用非对称直接求解器（MPI并行LU分解）
+                                    ///< 适用场景：大规模非对称系统、通用分布式求解
+
+        // ===== SuperLU 后端（可选，需编译期启用） =====
+        SUPERLU_GENERAL_DIRECT,     ///< SuperLU_MT并行LU分解求解器
+                                    ///< 适用场景：中大规模稀疏系统、多线程并行加速
+                                    ///< 特点：列选主元数值稳定性优秀
+
+        // ===== 迭代求解器 =====
         CG,                     ///< 共轭梯度迭代求解器（CGSolver）
                                 ///< 适用场景：大规模SPD矩阵（百万DOF级别）、条件数适中的良态系统
                                 ///< 收敛特性：残差单调递减，理论上n步精确收敛
@@ -193,19 +214,52 @@ public:
         FEEM_DEBUG("EMSolverFactory::create_solver 创建求解器类型: {}",
                    static_cast<int>(type));
 
+        std::unique_ptr<SolverBackend> backend;
+
         switch (type) {
+            // ===== Eigen 后端（默认，始终可用） =====
             case SolverType::SYMMETRIC_DIRECT:
-                FEEM_DEBUG("  -> 创建 SymmetricDirectSolver (Cholesky分解)");
-                return std::make_unique<SymmetricDirectSolver>();
+                FEEM_DEBUG("  -> 创建 UnifiedDirectSolver + EigenLLTBackend");
+                backend = std::make_unique<EigenLLTBackend>();
+                return std::make_unique<UnifiedDirectSolver>(std::move(backend));
 
             case SolverType::SYMMETRIC_INDEFINITE:
-                FEEM_DEBUG("  -> 创建 SymmetricIndefiniteDirectSolver (LDL^T分解)");
-                return std::make_unique<SymmetricIndefiniteDirectSolver>();
+                FEEM_DEBUG("  -> 创建 UnifiedDirectSolver + EigenLDLTBackend");
+                backend = std::make_unique<EigenLDLTBackend>();
+                return std::make_unique<UnifiedDirectSolver>(std::move(backend));
 
             case SolverType::GENERAL_DIRECT:
-                FEEM_DEBUG("  -> 创建 GeneralDirectSolver (LU分解)");
-                return std::make_unique<GeneralDirectSolver>();
+                FEEM_DEBUG("  -> 创建 UnifiedDirectSolver + EigenLUBackend");
+                backend = std::make_unique<EigenLUBackend>();
+                return std::make_unique<UnifiedDirectSolver>(std::move(backend));
 
+            // ===== MUMPS 后端（需编译期启用 HAVE_MUMPS） =====
+#ifdef HAVE_MUMPS
+            case SolverType::MUMPS_SYMMETRIC_DIRECT:
+                FEEM_DEBUG("  -> 创建 UnifiedDirectSolver + MUMPSBackend(SPD)");
+                backend = std::make_unique<MUMPSBackend>(MUMPSBackend::MatrixType::SYMMETRIC_POSITIVE_DEFINITE);
+                return std::make_unique<UnifiedDirectSolver>(std::move(backend));
+
+            case SolverType::MUMPS_SYMMETRIC_INDEFINITE:
+                FEEM_DEBUG("  -> 创建 UnifiedDirectSolver + MUMPSBackend(SID)");
+                backend = std::make_unique<MUMPSBackend>(MUMPSBackend::MatrixType::SYMMETRIC_INDEFINITE);
+                return std::make_unique<UnifiedDirectSolver>(std::move(backend));
+
+            case SolverType::MUMPS_GENERAL_DIRECT:
+                FEEM_DEBUG("  -> 创建 UnifiedDirectSolver + MUMPSBackend(LU)");
+                backend = std::make_unique<MUMPSBackend>(MUMPSBackend::MatrixType::UNSYMMETRIC);
+                return std::make_unique<UnifiedDirectSolver>(std::move(backend));
+#endif
+
+            // ===== SuperLU 后端（需编译期启用 HAVE_SUPERLU） =====
+#ifdef HAVE_SUPERLU
+            case SolverType::SUPERLU_GENERAL_DIRECT:
+                FEEM_DEBUG("  -> 创建 UnifiedDirectSolver + SuperLUBackend");
+                backend = std::make_unique<SuperLUBackend>();
+                return std::make_unique<UnifiedDirectSolver>(std::move(backend));
+#endif
+
+            // ===== 迭代求解器（保持不变） =====
             case SolverType::CG: {
                 FEEM_DEBUG("  -> 创建 CGSolver (共轭梯度法)");
                 CGConfig config;
@@ -236,16 +290,36 @@ public:
      */
     static std::string get_solver_name(SolverType type) {
         switch (type) {
+            // Eigen 后端
             case SolverType::SYMMETRIC_DIRECT:
-                return "SymmetricDirectSolver";
+                return "UnifiedDirect_EigenLLT";
             case SolverType::SYMMETRIC_INDEFINITE:
-                return "SymmetricIndefiniteDirectSolver";
+                return "UnifiedDirect_EigenLDLT";
             case SolverType::GENERAL_DIRECT:
-                return "GeneralDirectSolver";
+                return "UnifiedDirect_EigenLU";
+
+            // MUMPS 后端
+#ifdef HAVE_MUMPS
+            case SolverType::MUMPS_SYMMETRIC_DIRECT:
+                return "UnifiedDirect_MUMPS_SPD";
+            case SolverType::MUMPS_SYMMETRIC_INDEFINITE:
+                return "UnifiedDirect_MUMPS_SID";
+            case SolverType::MUMPS_GENERAL_DIRECT:
+                return "UnifiedDirect_MUMPS_LU";
+#endif
+
+            // SuperLU 后端
+#ifdef HAVE_SUPERLU
+            case SolverType::SUPERLU_GENERAL_DIRECT:
+                return "UnifiedDirect_SuperLU_MT";
+#endif
+
+            // 迭代求解器
             case SolverType::CG:
                 return "CGSolver";
             case SolverType::BICGSTAB:
                 return "BiCGSTABSolver";
+
             default:
                 return "UnknownSolver";
         }

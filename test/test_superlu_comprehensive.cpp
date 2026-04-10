@@ -42,7 +42,7 @@
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     #include "em_direct_solvers.h"
     #include "slu_mt_ddefs.h"
 #else
@@ -163,7 +163,7 @@ double compute_residual_norm(const CsrMatrix<double>& A,
  * @test 验证 SuperLU_MT 后端基本可用性
  */
 TEST(SuperLUComprehensiveTest, BackendAvailability) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     EXPECT_TRUE(DirectBackendManager::isBackendAvailable(DirectBackendType::SUPERLU));
     EXPECT_STREQ(DirectBackendManager::getBackendName(DirectBackendType::SUPERLU).c_str(), "SuperLU");
     
@@ -181,7 +181,7 @@ TEST(SuperLUComprehensiveTest, BackendAvailability) {
  * @test 测试 3x3 小矩阵的 LU 分解和求解
  */
 TEST(SuperLUComprehensiveTest, TinyMatrix3x3) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     // 构造简单的 3x3 SPD 矩阵
     CsrMatrix<double> A = generate_spd_matrix(3, 0.5);
     
@@ -216,7 +216,7 @@ TEST(SuperLUComprehensiveTest, TinyMatrix3x3) {
  * @test 测试中等规模矩阵（100x100）求解
  */
 TEST(SuperLUComprehensiveTest, MediumMatrix100x100) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     int n = 100;
     auto A = generate_spd_matrix(n, 0.05);
     
@@ -247,7 +247,7 @@ TEST(SuperLUComprehensiveTest, MediumMatrix100x100) {
  * @test 测试大规模矩阵（1000x1000）求解性能
  */
 TEST(SuperLUComprehensiveTest, LargeMatrix1000x1000) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     int n = 1000;
     auto A = generate_spd_matrix(n, 0.01);
     
@@ -285,7 +285,7 @@ TEST(SuperLUComprehensiveTest, LargeMatrix1000x1000) {
  * @test 测试病态矩阵（条件数 1e10）求解
  */
 TEST(SuperLUComprehensiveTest, IllConditionedMatrix) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     int n = 50;
     auto A = generate_ill_conditioned_matrix(n, 1e10);
     
@@ -318,7 +318,7 @@ TEST(SuperLUComprehensiveTest, IllConditionedMatrix) {
  * @test 测试单位矩阵求解
  */
 TEST(SuperLUComprehensiveTest, IdentityMatrix) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     int n = 20;
     CooMatrix<double> coo(n, n);
     for (int i = 0; i < n; ++i) {
@@ -353,7 +353,7 @@ TEST(SuperLUComprehensiveTest, IdentityMatrix) {
  * @test 测试重复求解的一致性
  */
 TEST(SuperLUComprehensiveTest, RepeatedSolveConsistency) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     int n = 100;
     auto A = generate_spd_matrix(n, 0.05);
     
@@ -390,7 +390,7 @@ TEST(SuperLUComprehensiveTest, RepeatedSolveConsistency) {
  * @test 测试资源清理和重新初始化
  */
 TEST(SuperLUComprehensiveTest, ClearAndReinitialize) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     int n = 50;
     auto A1 = generate_spd_matrix(n, 0.1);
     auto A2 = generate_spd_matrix(n, 0.1);
@@ -426,7 +426,7 @@ TEST(SuperLUComprehensiveTest, ClearAndReinitialize) {
  * @test 性能基准：不同规模矩阵的分解时间
  */
 TEST(SuperLUComprehensiveTest, PerformanceBenchmark_Decomposition) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     std::vector<int> sizes = {100, 500, 1000, 2000, 3000};
     std::vector<double> times;
     
@@ -473,7 +473,7 @@ TEST(SuperLUComprehensiveTest, PerformanceBenchmark_Decomposition) {
  * @test 测试内存使用（通过 SuperLU_MT 统计信息）
  */
 TEST(SuperLUComprehensiveTest, MemoryUsageAnalysis) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     int n = 1000;
     auto A = generate_spd_matrix(n, 0.01);
     
@@ -501,7 +501,7 @@ TEST(SuperLUComprehensiveTest, MemoryUsageAnalysis) {
  * @test 与 Eigen 后端对比验证
  */
 TEST(SuperLUComprehensiveTest, CrossValidationWithEigen) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     int n = 200;
     auto A = generate_spd_matrix(n, 0.05);
     Eigen::VectorXd b = Eigen::VectorXd::Random(n);
@@ -542,7 +542,7 @@ TEST(SuperLUComprehensiveTest, CrossValidationWithEigen) {
  *          验证每次求解的精度和一致性。
  */
 TEST(SuperLUComprehensiveTest, ReuseFactorizationForMultipleRHS) {
-#if EM_SOLVER_HAS_SUPERLU
+#ifdef HAVE_SUPERLU
     const int n = 200;
     const int num_rhs = 20;  // 右端项数量
 
