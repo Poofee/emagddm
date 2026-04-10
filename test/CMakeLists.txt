@@ -58,10 +58,6 @@ add_executable(test_sparse_matrix_gtest_stage2
     test_sparse_matrix_gtest_stage2.cpp
 )
 
-# 暂时禁用test_sparse_matrix_gtest_stage3，因为API不兼容
-# add_executable(test_sparse_matrix_gtest_stage3
-#     test_sparse_matrix_gtest_stage3.cpp
-# )
 add_executable(test_sparse_matrix_gtest_stage3_simple
     test_sparse_matrix_gtest_stage3_simple.cpp
 )
@@ -85,12 +81,6 @@ target_include_directories(test_sparse_matrix_gtest_stage2
     PRIVATE
         ${CMAKE_SOURCE_DIR}/include
 )
-
-# 暂时禁用test_sparse_matrix_gtest_stage3配置
-# target_include_directories(test_sparse_matrix_gtest_stage3
-#     PRIVATE
-#         ${CMAKE_SOURCE_DIR}/include
-# )
 
 target_include_directories(test_sparse_matrix_gtest_stage3_simple
     PRIVATE
@@ -120,14 +110,6 @@ target_link_libraries(test_sparse_matrix_gtest_stage2
         GTest::gtest
         GTest::gtest_main
 )
-
-# 暂时禁用test_sparse_matrix_gtest_stage3链接配置
-# target_link_libraries(test_sparse_matrix_gtest_stage3
-#     PRIVATE
-#         numeric_lib
-#         GTest::gtest
-#         GTest::gtest_main
-# )
 
 target_link_libraries(test_sparse_matrix_gtest_stage3_simple
     PRIVATE
@@ -257,23 +239,6 @@ target_link_libraries(test_aedt_parsing
         GTest::gtest
         GTest::gtest_main
 )
-
-# 调试解析器
-# add_executable(debug_parser
-#     debug_parser.cpp
-# )
-# 
-# target_include_directories(debug_parser
-#     PRIVATE
-#         ${CMAKE_SOURCE_DIR}/include
-#         ${CMAKE_SOURCE_DIR}/lib/nlohmann
-# )
-# 
-# target_link_libraries(debug_parser
-#     PRIVATE
-#         tool_lib
-#         spdlog_lib
-# )
 
 # 启用测试
 enable_testing()
@@ -557,9 +522,6 @@ target_link_libraries(test_linear_solver_edge
 add_test(NAME test_linear_solver_edge COMMAND test_linear_solver_edge)
 
 # ==================== 线性求解器标量场测试（PRISM15单元）====================
-# Task 6: 测试用例1 - 标量场泊松方程求解（PRISM15单元）
-# 验证 SymmetricDirectSolver 在 15×15 对称正定刚度矩阵上的正确性
-
 add_executable(test_linear_solver_scalar
     test_linear_solver_scalar.cpp
 )
@@ -584,143 +546,7 @@ target_link_libraries(test_linear_solver_scalar
 
 add_test(NAME test_linear_solver_scalar COMMAND test_linear_solver_scalar)
 
-# ==================== SuperLU_MT 集成测试 ====================
-# 验证 SuperLU_MT 多线程稀疏LU求解器在项目中的正确集成
-# 包括：后端可用性检测、SPD矩阵求解、多次solve一致性、与Eigen交叉验证等
-add_executable(test_superlu_mt_integration
-    test_superlu_mt_integration.cpp
-)
-
-target_include_directories(test_superlu_mt_integration
-    PRIVATE
-        ${CMAKE_SOURCE_DIR}/include
-        ${CMAKE_SOURCE_DIR}/include/numeric
-        ${CMAKE_SOURCE_DIR}/include/tool
-        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
-        ${CMAKE_SOURCE_DIR}/lib/eigen
-)
-
-target_link_libraries(test_superlu_mt_integration
-    PRIVATE
-        numeric_lib
-        tool_lib
-        spdlog_lib
-        GTest::gtest
-        GTest::gtest_main
-)
-
-# 若SuperLU_MT可用，链接对应库并启用SuperLU后端
-if(SUPERLU_MT_AVAILABLE AND TARGET superlu_lib)
-    target_compile_definitions(test_superlu_mt_integration PRIVATE HAVE_SUPERLU)
-endif()
-
-add_test(NAME test_superlu_mt_integration COMMAND test_superlu_mt_integration)
-
-# ==================== SuperLU_MT 诊断测试（用于定位崩溃）====================
-add_executable(test_superlu_diagnostic
-    test_superlu_diagnostic.cpp
-)
-
-target_include_directories(test_superlu_diagnostic
-    PRIVATE
-        ${CMAKE_SOURCE_DIR}/include
-        ${CMAKE_SOURCE_DIR}/include/numeric
-        ${CMAKE_SOURCE_DIR}/include/tool
-        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
-        ${CMAKE_SOURCE_DIR}/lib/eigen
-)
-
-target_link_libraries(test_superlu_diagnostic
-    PRIVATE
-        numeric_lib
-        tool_lib
-        spdlog_lib
-        GTest::gtest
-        GTest::gtest_main
-)
-
-message(STATUS "  [TEST-CFG] SUPERLU_MT_AVAILABLE=${SUPERLU_MT_AVAILABLE}")
-message(STATUS "  [TEST-CFG] SUPERLU_MT_TARGET=${SUPERLU_MT_TARGET}")
-if(SUPERLU_MT_AVAILABLE AND TARGET superlu_lib)
-    message(STATUS "  [TEST-CFG] -> Enabling HAVE_SUPERLU for test_superlu_diagnostic")
-    target_compile_definitions(test_superlu_diagnostic PRIVATE HAVE_SUPERLU)
-else()
-    message(STATUS "  [TEST-CFG] -> SuperLU NOT available for test_superlu_diagnostic")
-endif()
-
-add_test(NAME test_superlu_diagnostic COMMAND test_superlu_diagnostic)
-
-# ==================== SuperLU_MT 全面功能与性能测试 ====================
-add_executable(test_superlu_comprehensive
-    test_superlu_comprehensive.cpp
-)
-
-target_include_directories(test_superlu_comprehensive
-    PRIVATE
-        ${CMAKE_SOURCE_DIR}/include
-        ${CMAKE_SOURCE_DIR}/include/numeric
-        ${CMAKE_SOURCE_DIR}/include/tool
-        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
-        ${CMAKE_SOURCE_DIR}/lib/eigen
-)
-
-target_link_libraries(test_superlu_comprehensive
-    PRIVATE
-        numeric_lib
-        tool_lib
-        spdlog_lib
-        GTest::gtest
-        GTest::gtest_main
-)
-
-message(STATUS "  [TEST-CFG] Configuring test_superlu_comprehensive...")
-if(SUPERLU_MT_AVAILABLE AND TARGET superlu_lib)
-    message(STATUS "  [TEST-CFG] -> Enabling HAVE_SUPERLU for test_superlu_comprehensive")
-    target_compile_definitions(test_superlu_comprehensive PRIVATE HAVE_SUPERLU)
-else()
-    message(STATUS "  [TEST-CFG] -> SuperLU NOT available for test_superlu_comprehensive")
-endif()
-
-add_test(NAME test_superlu_comprehensive COMMAND test_superlu_comprehensive)
-
-# ==================== SuperluContext RAII 封装全面测试 ====================
-# 覆盖 SuperluContext 类的所有公开接口：构造/析构、initialize、factorize、solve、
-# reset、移动语义、状态机转换、内存安全、不同规模矩阵
-add_executable(test_superlu_context
-    test_superlu_context.cpp
-)
-
-target_include_directories(test_superlu_context
-    PRIVATE
-        ${CMAKE_SOURCE_DIR}/include
-        ${CMAKE_SOURCE_DIR}/include/numeric
-        ${CMAKE_SOURCE_DIR}/include/tool
-        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
-        ${CMAKE_SOURCE_DIR}/lib/eigen
-)
-
-target_link_libraries(test_superlu_context
-    PRIVATE
-        numeric_lib
-        tool_lib
-        spdlog_lib
-        GTest::gtest
-        GTest::gtest_main
-)
-
-message(STATUS "  [TEST-CFG] Configuring test_superlu_context...")
-if(SUPERLU_MT_AVAILABLE AND TARGET superlu_lib)
-    message(STATUS "  [TEST-CFG] -> Enabling HAVE_SUPERLU for test_superlu_context")
-    target_compile_definitions(test_superlu_context PRIVATE HAVE_SUPERLU)
-else()
-    message(STATUS "  [TEST-CFG] -> SuperLU NOT available for test_superlu_context")
-endif()
-
-add_test(NAME test_superlu_context COMMAND test_superlu_context)
-
 # ==================== MumpsContext RAII 封装全面测试 ====================
-# 覆盖 MumpsContext 类的所有公开接口：构造/析构、initialize、factorize、solve、
-# reset、移动语义、状态机转换、内存安全、精度验证、与 SymmetricDirectSolver 集成
 add_executable(test_mumps_context
     test_mumps_context.cpp
 )
@@ -791,8 +617,6 @@ endif()
 add_test(NAME test_complex_mumps_context COMMAND test_complex_mumps_context)
 
 # ==================== Eigen 扩展接口测试 ====================
-# 测试稀疏矩阵和向量的 Eigen 接口扩展：merge_duplicates, get_eigen_real, get_eigen_complex
-# 覆盖 CooMatrix、CsrMatrix、Vector 的实数/复数统一架构
 add_executable(test_eigen_extension
     test_eigen_extension_simple.cpp
 )
@@ -815,12 +639,6 @@ target_link_libraries(test_eigen_extension
 add_test(NAME test_eigen_extension COMMAND test_eigen_extension)
 
 # ==================== 实数/复数统一架构线性求解器完整功能验证 ====================
-# 验证所有扩展功能的正确性：
-# 1. 实数对称正定矩阵 SymmetricDirectSolver (LLT分解)
-# 2. 复数一般矩阵 GeneralDirectSolver (LU分解)
-# 3. 实数迭代求解器 CGSolver + BiCGSTABSolver
-# 4. 复数迭代求解器 CGSolver + BiCGSTABSolver
-# 5. 数据结构扩展接口 (merge_duplicates, get_eigen)
 add_executable(test_unified_solver
     test_unified_solver.cpp
 )
@@ -843,46 +661,3 @@ target_link_libraries(test_unified_solver
 )
 
 add_test(NAME test_unified_solver COMMAND test_unified_solver)
-
-# ==================== MUMPS 求解器完备测试套件 ====================
-# 全面验证 MUMPS 后端在实数和复数场景下的正确性：
-# 1. SymmetricDirectSolver + MUMPS 实数后端 (SPD 矩阵)
-# 2. GeneralDirectSolver + MUMPS 实数后端 (非对称矩阵)
-# 3. SymmetricDirectSolver + MUMPS 复数后端 (Hermitian 正定)
-# 4. SymmetricIndefiniteDirectSolver + MUMPS 复数后端 (一般 Hermitian)
-# 5. GeneralDirectSolver + MUMPS 复数后端 (非对称复数)
-# 6. Eigen vs MUMPS 后端一致性验证
-# 7. 错误处理（未设置矩阵、维度不匹配）
-add_executable(test_mumps_solver
-    test_mumps_solver.cpp
-)
-
-target_include_directories(test_mumps_solver
-    PRIVATE
-        ${CMAKE_SOURCE_DIR}/include
-        ${CMAKE_SOURCE_DIR}/include/numeric
-        ${CMAKE_SOURCE_DIR}/include/tool
-        ${CMAKE_SOURCE_DIR}/lib/eigen
-        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
-)
-
-target_link_libraries(test_mumps_solver
-    PRIVATE
-        numeric_lib
-        tool_lib
-        spdlog_lib
-        GTest::gtest
-        GTest::gtest_main
-)
-
-message(STATUS "  [TEST-CFG] Configuring test_mumps_solver...")
-if(MUMPS_AVAILABLE)
-    message(STATUS "  [TEST-CFG] -> Enabling HAVE_MUMPS for test_mumps_solver")
-    target_link_libraries(test_mumps_solver PRIVATE mumps_lib)
-    target_compile_definitions(test_mumps_solver PRIVATE HAVE_MUMPS)
-    target_include_directories(test_mumps_solver PRIVATE ${MUMPS_ROOT}/include ${MUMPS_ROOT}/libseq)
-else()
-    message(STATUS "  [TEST-CFG] -> MUMPS NOT available for test_mumps_solver (tests will be skipped)")
-endif()
-
-add_test(NAME test_mumps_solver COMMAND test_mumps_solver)

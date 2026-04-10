@@ -1,15 +1,22 @@
 /**
  * @file em_direct_solvers_mumps.cpp
- * @brief MUMPS 后端直接求解器实现（独立编译单元）
+ * @brief MUMPS 后端辅助类实现（独立编译单元）
  * @details 将 MUMPS 相关代码从 em_direct_solvers.cpp 拆分出来，
  *          避免非 MUMPS 目标链接时引入 Intel Fortran 运行时依赖。
  *
  * 包含：
  * - MumpsContext RAII 封装类的完整实现
- * - SymmetricDirectSolver 的 MUMPS 后端方法（decompose_with_mumps / solve_with_mumps）
+ *
+ * @note 原三个直接求解器类已迁移至新架构：
+ *       - UnifiedDirectSolver + SolverBackend 策略模式
+ *       - MUMPSBackend 统一 MUMPS 后端
+ *
+ * @see MUMPSBackend 新架构 MUMPS 后端
+ * @see MumpsContext RAII 资源管理
  *
  * @author Poofee
  * @date 2026-04-09
+ * @version 2.0 (重构版 - 移除旧求解器类)
  */
 
 #include "em_direct_solvers.h"
@@ -42,14 +49,23 @@ namespace numeric {
 // MumpsContext 实现（MUMPS RAII 封装）
 // ============================================================================
 
+/**
+ * @brief 构造函数，初始化为未初始化状态
+ */
 MumpsContext::MumpsContext() : state_(State::UNINITIALIZED), n_(0) {
     memset(&mumps_data_, 0, sizeof(mumps_data_));
 }
 
+/**
+ * @brief 析构函数，自动释放 MUMPS 资源
+ */
 MumpsContext::~MumpsContext() {
     reset();
 }
 
+/**
+ * @brief 移动构造函数
+ */
 MumpsContext::MumpsContext(MumpsContext&& other) noexcept
     : state_(other.state_), n_(other.n_),
       mumps_data_(other.mumps_data_),
@@ -63,6 +79,9 @@ MumpsContext::MumpsContext(MumpsContext&& other) noexcept
     memset(&other.mumps_data_, 0, sizeof(other.mumps_data_));
 }
 
+/**
+ * @brief 移动赋值运算符
+ */
 MumpsContext& MumpsContext::operator=(MumpsContext&& other) noexcept {
     if (this != &other) {
         reset();
@@ -120,6 +139,7 @@ bool MumpsContext::initialize(int sym) {
  * @param jcn 列索引数组（1-based，MUMPS 格式）
  * @param a 非零值数组
  * @return 0 成功，非零 MUMPS 错误码
+ *
  * @note Windows+Intel Fortran 下 JOB=5 存在 NNZ 传递 bug，必须拆分为 JOB=1+JOB=2
  */
 int MumpsContext::factorize(int n, int nz, int* irn, int* jcn, double* a) {
@@ -286,73 +306,6 @@ int MumpsContext::factorize_from_csr(const CsrMatrix<double>& csr, int sym) {
 
     // 调用 factorize()（使用内部存储的数组指针）
     return factorize(n, nz, irn_storage_.data(), jcn_storage_.data(), a_storage_.data());
-}
-
-// ============================================================================
-// SymmetricDirectSolver MUMPS 后端
-// ============================================================================
-
-/**
- * @brief 使用MUMPS后端执行分解（通过 MumpsContext RAII 封装）
- * @return SolverResult 分解结果
- *
- * @details 通过 MumpsContext 封装执行完整的初始化和分解流程：
- * 1. 将 Eigen 稀疏矩阵转换为 CsrMatrix 格式
- * 2. 调用 ctx.factorize_from_csr() 自动完成 CSR→COO 转换和分解
- */
-SolverResult SymmetricDirectSolver::decompose_with_mumps() {
-    FEEM_DEBUG("SymmetricDirectSolver::decompose_with_mumps - 开始MUMPS分解");
-
-    try {
-        const int n = static_cast<int>(eigen_matrix_.rows());
-        eigen_matrix_.makeCompressed();
-
-        // 将 Eigen 矩阵转换为 CsrMatrix
-        CooMatrix<double> coo(n, n);
-        for (int col = 0; col < n; ++col) {
-            for (Eigen::SparseMatrix<double>::InnerIterator it(eigen_matrix_, col); it; ++it) {
-                coo.add_value(static_cast<int>(it.row()), static_cast<int>(it.col()), it.value());
-            }
-        }
-
-        CsrMatrix<double> csr(n, n);
-        csr.build_from_coo(coo);
-
-        mumps_ctx_ = std::make_unique<MumpsContext>();
-
-        // 使用便捷方法：自动处理初始化、CSR→COO转换、分解
-        int info = mumps_ctx_->factorize_from_csr(csr, 0);
-        if (info != 0) {
-            mumps_ctx_.reset();
-            return create_error_result(SolverStatus::NUMERICAL_ERROR,
-                                       "MUMPS 分解失败 (info=" + std::to_string(info) + ")");
-        }
-
-        FEEM_DEBUG("decompose_with_mumps - MUMPS分解成功, 维度: {}x{}", n, n);
-        return create_success_result(Eigen::VectorXd());
-    } catch (const std::bad_alloc& e) {
-        FEEM_ERROR("decompose_with_mumps - 内存分配失败: {}", e.what());
-        return create_error_result(SolverStatus::NUMERICAL_ERROR,
-                                   "内存不足，无法完成MUMPS分解");
-    } catch (const std::exception& e) {
-        FEEM_ERROR("decompose_with_mumps - 异常: {}", e.what());
-        return create_error_result(SolverStatus::NUMERICAL_ERROR,
-                                   std::string("MUMPS分解异常: ") + e.what());
-    }
-}
-
-/**
- * @brief 使用MUMPS后端执行求解（通过 MumpsContext RAII 封装）
- */
-SolverResult SymmetricDirectSolver::solve_with_mumps(const Eigen::VectorXd& b) {
-    FEEM_DEBUG("SymmetricDirectSolver::solve_with_mumps - 开始MUMPS求解");
-
-    if (!mumps_ctx_ || !mumps_ctx_->is_factored()) {
-        return create_error_result(SolverStatus::INVALID_INPUT,
-                                   "MUMPS未完成分解，请先调用set_matrix()");
-    }
-
-    return mumps_ctx_->solve(b);
 }
 
 } // namespace numeric

@@ -2,8 +2,8 @@
  * @file test_unified_solver.cpp
  * @brief 实数/复数统一架构线性求解器完整功能验证
  * @details 使用 Google Test 框架验证统一求解器架构的所有核心功能：
- *          - 实数对称正定矩阵的 SymmetricDirectSolver 求解（LLT分解）
- *          - 复数一般矩阵的 GeneralDirectSolver 求解（LU分解）
+ *          - 实数对称正定矩阵的 UnifiedDirectSolver (Eigen LLT) 求解
+ *          - 复数一般矩阵的 UnifiedDirectSolver (Eigen LU) 求解
  *          - 实数矩阵的 CGSolver 和 BiCGSTABSolver 迭代求解
  *          - 复数矩阵的 CGSolver 和 BiCGSTABSolver 迭代求解
  *          - 扩展数据结构接口（merge_duplicates, get_eigen等）
@@ -16,7 +16,7 @@
  *
  * @author Poofee
  * @date 2026-04-10
- * @version 1.0
+ * @version 2.0 (重构版 - 使用 UnifiedDirectSolver 新架构)
  */
 
 #include <gtest/gtest.h>
@@ -27,10 +27,13 @@
 #include <Eigen/Dense>
 #include <Eigen/SparseCholesky>
 #include <Eigen/SparseLU>
+#include <memory>
 
 #include "em_direct_solvers.h"
 #include "em_iterative_solvers.h"
 #include "em_sparse_converter.h"
+#include "em_solver_factory.h"
+#include "unified_direct_solver.h"
 #include "coo_matrix.hpp"
 #include "csr_matrix.hpp"
 #include "vector.hpp"
@@ -99,71 +102,73 @@ CsrMatrix<double> build_5x5_spd_matrix() {
 CsrMatrix<std::complex<double>> build_4x4_complex_matrix() {
     int n = 4;
 
-    // 构造稠密复数矩阵
+    // 构造稠密复数矩阵（便于控制结构）
     Eigen::MatrixXcd A_dense = Eigen::MatrixXcd::Zero(n, n);
 
-    // 实部：对称正定结构（主对角占优）
+    // 实部：对称正定三对角 + 额外耦合
     for (int i = 0; i < n; ++i) {
-        A_dense(i, i) = std::complex<double>(5.0 + i, 0.5 + 0.1 * i);
+        A_dense(i, i) = std::complex<double>(4.0 + i, 0.0);  // 正实部对角线
     }
+    for (int i = 0; i < n - 1; ++i) {
+        A_dense(i, i+1) = std::complex<double>(-1.0, 0.0);
+        A_dense(i+1, i) = std::complex<double>(-1.0, 0.0);   // 对称实部
+    }
+    A_dense(0, 2) = std::complex<double>(-0.3, 0.0);
+    A_dense(2, 0) = std::complex<double>(-0.3, 0.0);
 
-    // 实部：次对角线耦合
-    A_dense(0, 1) = std::complex<double>(-1.0, 0.2);
-    A_dense(1, 0) = std::complex<double>(-1.0, -0.1);  // 虚部非对称
-    A_dense(1, 2) = std::complex<double>(-1.5, 0.3);
-    A_dense(2, 1) = std::complex<double>(-1.5, -0.2);  // 虚部非对称
-    A_dense(2, 3) = std::complex<double>(-0.8, 0.1);
-    A_dense(3, 2) = std::complex<double>(-0.8, -0.05);  // 虚部非对称
+    // 虚部：非对称涡流阻尼项（jωσ 引入的非对称性）
+    double omega_sigma = 2.0 * 3.14159 * 50.0 * 1e6;  // ωσ ≈ 314MHz
+    A_dense(0, 0) += std::complex<double>(0.0, omega_sigma * 0.1);  // 主对角虚部
+    A_dense(1, 1) += std::complex<double>(0.0, omega_sigma * 0.15);
+    A_dense(2, 2) += std::complex<double>(0.0, omega_sigma * 0.08);
+    A_dense(3, 3) += std::complex<double>(0.0, omega_sigma * 0.12);
 
-    // 远距离耦合（模拟有限元中的长程相互作用）
-    A_dense(0, 2) = std::complex<double>(-0.3, 0.05);
-    A_dense(2, 0) = std::complex<double>(-0.3, -0.02);
-    A_dense(1, 3) = std::complex<double>(-0.4, 0.08);
-    A_dense(3, 1) = std::complex<double>(-0.4, -0.03);
+    // 非对称虚部耦合（模拟涡流效应的方向性）
+    A_dense(0, 1) += std::complex<double>(0.0, -omega_sigma * 0.05);
+    A_dense(1, 2) += std::complex<double>(0.0, -omega_sigma * 0.03);
+    A_dense(2, 3) += std::complex<double>(0.0, -omega_sigma * 0.04);
 
-    // 转换为稀疏矩阵
+    // 转换为稀疏矩阵并压缩存储
     Eigen::SparseMatrix<std::complex<double>> A_sparse = A_dense.sparseView();
     A_sparse.makeCompressed();
 
+    // 转换为项目自定义 CSR 格式
     return SparseConverter::from_eigen_complex(A_sparse);
 }
 
 
 /**
- * @brief 构建5x5非对称实数矩阵（用于BiCGSTAB测试）
+ * @brief 构建5x5非对称实数测试矩阵
  * @return CsrMatrix<double> 5x5 非对称稀疏矩阵
- *
- * @details 构建具有明显非对称性的矩阵：
- * - 对角线：正值
- * - 上三角和下三角使用不同值以产生非对称性
  */
 CsrMatrix<double> build_5x5_nonsymmetric_matrix() {
     int n = 5;
-
     Eigen::MatrixXd A_dense = Eigen::MatrixXd::Zero(n, n);
 
-    // 主对角线
+    // 对角线
     for (int i = 0; i < n; ++i) {
-        A_dense(i, i) = 4.0 + 0.5 * i;
+        A_dense(i, i) = 3.0 + i * 0.5;
     }
 
-    // 下三角（较大值）
-    A_dense(1, 0) = -1.5;
-    A_dense(2, 1) = -1.8;
-    A_dense(3, 2) = -1.3;
-    A_dense(4, 3) = -1.6;
-    A_dense(2, 0) = -0.3;
-    A_dense(3, 1) = -0.25;
-    A_dense(4, 2) = -0.35;
+    // 下三角元素（不同于上三角 → 非对称）
+    A_dense(1, 0) = 2.0;
+    A_dense(2, 0) = -1.0;
+    A_dense(2, 1) = 3.0;
+    A_dense(3, 0) = 0.5;
+    A_dense(3, 1) = -0.5;
+    A_dense(3, 2) = 2.5;
+    A_dense(4, 1) = 1.5;
+    A_dense(4, 2) = -1.0;
+    A_dense(4, 3) = 3.0;
 
-    // 上三角（较小值，产生非对称性）
-    A_dense(0, 1) = -0.8;
-    A_dense(1, 2) = -0.9;
-    A_dense(2, 3) = -0.7;
-    A_dense(3, 4) = -0.85;
-    A_dense(0, 2) = -0.15;
-    A_dense(1, 3) = -0.12;
-    A_dense(2, 4) = -0.18;
+    // 上三角元素（独立于下三角）
+    A_dense(0, 1) = -1.0;
+    A_dense(0, 2) = 0.5;
+    A_dense(1, 2) = 2.0;
+    A_dense(1, 3) = -0.5;
+    A_dense(2, 3) = 1.5;
+    A_dense(2, 4) = -0.8;
+    A_dense(3, 4) = 2.0;
 
     Eigen::SparseMatrix<double> A_sparse = A_dense.sparseView();
     A_sparse.makeCompressed();
@@ -217,12 +222,12 @@ protected:
 
 
 // ====================================================================
-//  测试1: 实数对称正定矩阵 SymmetricDirectSolver 求解
+//  测试1: 实数对称正定矩阵 UnifiedDirectSolver (LLT) 求解
 // ====================================================================
 
 /**
- * @test 测试实数对称正定矩阵的 SymmetricDirectSolver 求解
- * @details 测试场景：手动构建5x5对称正定矩阵，使用LLT分解求解
+ * @test 测试实数对称正定矩阵的 UnifiedDirectSolver (Eigen LLT) 求解
+ * @details 测试场景：手动构建5x5对称正定矩阵，使用新架构的统一求解器
  *
  * 验证要点：
  * - 求解状态为 SUCCESS
@@ -232,17 +237,17 @@ protected:
 TEST_F(RealSymmetricDirectSolverFixture, RealSymmetricDirectSolver_BasicSolve) {
     ASSERT_TRUE(matrix_valid_) << "SPD矩阵未成功构建";
 
-    // 创建对称正定直接求解器（默认使用Eigen后端）
-    SymmetricDirectSolver solver;
-
-    FEEM_INFO("求解器名称: {}", solver.get_solver_name());
+    // 使用工厂创建对称正定直接求解器（Eigen LLT后端）
+    auto solver = EMSolverFactory::create_solver(SolverType::EIGEN_SYMMETRIC_DIRECT);
+    ASSERT_NE(solver, nullptr) << "工厂创建求解器失败";
+    FEEM_INFO("求解器名称: {}", solver->get_solver_name());
 
     // 设置系数矩阵（触发Cholesky分解）
-    ASSERT_NO_THROW(solver.set_matrix(A_real_))
+    ASSERT_NO_THROW(solver->set_matrix(A_real_))
         << "set_matrix() 不应抛出异常";
 
     // 执行求解
-    auto result = solver.solve(b_real_);
+    auto result = solver->solve(b_real_);
 
     // 验证点1: 求解状态必须为 SUCCESS
     EXPECT_EQ(result.status, SolverStatus::SUCCESS)
@@ -279,11 +284,11 @@ TEST_F(RealSymmetricDirectSolverFixture, RealSymmetricDirectSolver_BasicSolve) {
 
 
 // ====================================================================
-//  测试2: 复数一般矩阵 GeneralDirectSolver 求解
+//  测试2: 复数一般矩阵 UnifiedDirectSolver (LU) 求解
 // ====================================================================
 
 /**
- * @test 测试复数一般矩阵的 GeneralDirectSolver 求解
+ * @test 测试复数一般矩阵的 UnifiedDirectSolver (Eigen LU) 求解
  * @details 测试场景：模拟时谐场50Hz的复数刚度矩阵，使用LU分解求解
  *
  * 验证要点：
@@ -309,17 +314,18 @@ TEST(ComplexGeneralDirectSolver, ComplexMatrix_LUSolve) {
     auto A_eigen = SparseConverter::to_eigen_complex(A_complex);
     Eigen::VectorXcd b_complex = A_eigen * x_expected;
 
-    // 创建通用直接求解器（LU分解）
-    GeneralDirectSolver solver;
+    // 使用工厂创建通用直接求解器（LU分解）
+    auto solver = EMSolverFactory::create_solver(SolverType::EIGEN_GENERAL_DIRECT);
+    ASSERT_NE(solver, nullptr) << "工厂创建求解器失败";
 
-    FEEM_INFO("复数求解器名称: {}", solver.get_solver_name());
+    FEEM_INFO("复数求解器名称: {}", solver->get_solver_name());
 
     // 设置复数系数矩阵
-    ASSERT_NO_THROW(solver.set_matrix(A_complex))
+    ASSERT_NO_THROW(solver->set_matrix(A_complex))
         << "set_matrix() 不应抛出异常";
 
     // 执行复数求解
-    auto result = solver.solve(b_complex);
+    auto result = solver->solve(b_complex);
 
     // 验证点1: 求解状态必须为 SUCCESS
     EXPECT_EQ(result.status, SolverStatus::SUCCESS)
@@ -372,8 +378,8 @@ TEST(ComplexGeneralDirectSolver, ComplexMatrix_LUSolve) {
 /**
  * @test 测试实数矩阵的 CGSolver 和 BiCGSTABSolver 求解
  * @details 测试场景：
- * - 对称正定矩阵使用 CG 求解，并与 SymmetricDirectSolver 对比
- * - 非对称矩阵使用 BiCGSTAB 求解，并与 GeneralDirectSolver 对比
+ * - 对称正定矩阵使用 CG 求解，并与 UnifiedDirectSolver (LLT) 对比
+ * - 非对称矩阵使用 BiCGSTAB 求解，并与 UnifiedDirectSolver (LU) 对比
  *
  * 验证要点：
  * - 两种迭代求解器都能收敛
@@ -399,10 +405,11 @@ TEST(RealIterativeSolvers, CGAndBiCGSTAB_ConvergenceAndAccuracy) {
         auto A_eigen = SparseConverter::to_eigen(A_spd);
         Eigen::VectorXd b = A_eigen * x_expected;
 
-        // 直接求解器参考解
-        SymmetricDirectSolver direct_solver;
-        direct_solver.set_matrix(A_spd);
-        auto direct_result = direct_solver.solve(b);
+        // 直接求解器参考解（使用新架构）
+        auto direct_solver = EMSolverFactory::create_solver(SolverType::EIGEN_SYMMETRIC_DIRECT);
+        ASSERT_NE(direct_solver, nullptr) << "直接求解器创建失败";
+        direct_solver->set_matrix(A_spd);
+        auto direct_result = direct_solver->solve(b);
         ASSERT_EQ(direct_result.status, SolverStatus::SUCCESS) << "直接求解器失败";
 
         // CG迭代求解器配置
@@ -459,10 +466,11 @@ TEST(RealIterativeSolvers, CGAndBiCGSTAB_ConvergenceAndAccuracy) {
         auto A_eigen = SparseConverter::to_eigen(A_nonsym);
         Eigen::VectorXd b = A_eigen * x_expected;
 
-        // 直接求解器参考解
-        GeneralDirectSolver direct_solver;
-        direct_solver.set_matrix(A_nonsym);
-        auto direct_result = direct_solver.solve(b);
+        // 直接求解器参考解（使用新架构）
+        auto direct_solver = EMSolverFactory::create_solver(SolverType::EIGEN_GENERAL_DIRECT);
+        ASSERT_NE(direct_solver, nullptr) << "直接求解器创建失败";
+        direct_solver->set_matrix(A_nonsym);
+        auto direct_result = direct_solver->solve(b);
         ASSERT_EQ(direct_result.status, SolverStatus::SUCCESS) << "直接求解器失败";
 
         // BiCGSTAB迭代求解器配置
@@ -534,10 +542,11 @@ TEST(ComplexIterativeSolvers, Complex_CGAndBiCGSTAB_Accuracy) {
     auto A_eigen = SparseConverter::to_eigen_complex(A_complex);
     Eigen::VectorXcd b = A_eigen * x_expected;
 
-    // 直接求解器参考解
-    GeneralDirectSolver direct_solver;
-    direct_solver.set_matrix(A_complex);
-    auto direct_result = direct_solver.solve(b);
+    // 直接求解器参考解（使用新架构）
+    auto direct_solver = EMSolverFactory::create_solver(SolverType::EIGEN_GENERAL_DIRECT);
+    ASSERT_NE(direct_solver, nullptr) << "复数直接求解器创建失败";
+    direct_solver->set_matrix(A_complex);
+    auto direct_result = direct_solver->solve(b);
     ASSERT_EQ(direct_result.status, SolverStatus::SUCCESS) << "复数直接求解器失败";
 
     // ========== 子测试A: 复数CGSolver ==========
@@ -773,8 +782,8 @@ int main(int argc, char** argv) {
     std::cout << "  实数/复数统一架构线性求解器完整功能验证测试套件" << std::endl;
     std::cout << "================================================================" << std::endl;
     std::cout << "测试内容:" << std::endl;
-    std::cout << "  1. 实数对称正定矩阵 SymmetricDirectSolver (LLT)" << std::endl;
-    std::cout << "  2. 复数一般矩阵 GeneralDirectSolver (LU)" << std::endl;
+    std::cout << "  1. 实数对称正定矩阵 UnifiedDirectSolver (Eigen LLT)" << std::endl;
+    std::cout << "  2. 复数一般矩阵 UnifiedDirectSolver (Eigen LU)" << std::endl;
     std::cout << "  3. 实数迭代求解器 CGSolver + BiCGSTABSolver" << std::endl;
     std::cout << "  4. 复数迭代求解器 CGSolver + BiCGSTABSolver" << std::endl;
     std::cout << "  5. 数据结构扩展接口 (merge_duplicates, get_eigen)" << std::endl;
