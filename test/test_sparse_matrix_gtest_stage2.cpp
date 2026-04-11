@@ -247,31 +247,33 @@ TEST_F(PreconditionerTest, ILU0Preconditioner) {
 class SymmetricCsrMatrixTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        // 创建对称测试矩阵（只包含下三角元素）
         coo_sym_ = CooMatrixReal(3, 3);
+        // 完整对称矩阵（上下三角均存储）
         coo_sym_.add_value(0, 0, 4.0);
-        coo_sym_.add_value(1, 0, 1.0);  // 对称位置 (0,1) 的值
+        coo_sym_.add_value(0, 1, 1.0);
+        coo_sym_.add_value(0, 2, 0.0);
+        coo_sym_.add_value(1, 0, 1.0);
         coo_sym_.add_value(1, 1, 3.0);
-        coo_sym_.add_value(2, 0, 0.0);  // 对称位置 (0,2) 的值（为0）
-        coo_sym_.add_value(2, 1, 2.0);  // 对称位置 (1,2) 的值
+        coo_sym_.add_value(1, 2, 2.0);
+        coo_sym_.add_value(2, 0, 0.0);
+        coo_sym_.add_value(2, 1, 2.0);
         coo_sym_.add_value(2, 2, 5.0);
-        
-        sym_csr_ = CsrMatrixReal(3, 3);  // 使用 CsrMatrix 替代 SymCsrMatrix（SymCsrMatrix 是抽象类）
+
+        sym_csr_ = CsrMatrixReal(3, 3);
         sym_csr_.build_from_coo(coo_sym_);
-        
-        // 创建测试向量
+
         x_ = {1.0, 2.0, 3.0};
     }
     
     CooMatrixReal coo_sym_;
-    CsrMatrixReal sym_csr_;  // 使用 CsrMatrix 替代 SymCsrMatrix
+    CsrMatrixReal sym_csr_;  // 完整存储对称矩阵（上下三角均保留）
     std::vector<double> x_;
 };
 
 TEST_F(SymmetricCsrMatrixTest, BasicProperties) {
     EXPECT_EQ(sym_csr_.rows(), 3);
     EXPECT_EQ(sym_csr_.cols(), 3);
-    EXPECT_EQ(sym_csr_.nnz(), 6);  // 对称矩阵存储下三角部分，包含对角线和所有下三角元素
+    EXPECT_EQ(sym_csr_.nnz(), 9);  // 完整存储9个元素（含两个零元）
     EXPECT_EQ(sym_csr_.get_data_type(), MatrixDataType::REAL);
 }
 

@@ -60,7 +60,7 @@ namespace numeric {
 
 #ifdef HAVE_MUMPS
 
-// 前向声明（完整定义在 .cpp 文件中通过 #include "em_direct_solvers.h" 获取）
+// 前向声明（完整定义在 .cpp 文件中通过 #include "direct_solvers.h" 获取）
 class MumpsContext;
 class ComplexMumpsContext;
 

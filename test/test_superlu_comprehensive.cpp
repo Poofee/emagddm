@@ -43,10 +43,10 @@
 #include <Eigen/Sparse>
 
 #ifdef HAVE_SUPERLU
-    #include "em_direct_solvers.h"
+    #include "direct_solvers.h"
     #include "slu_mt_ddefs.h"
 #else
-    #include "em_direct_solvers.h"
+    #include "direct_solvers.h"
 #endif
 
 #include "csr_matrix.hpp"
@@ -158,24 +158,6 @@ double compute_residual_norm(const CsrMatrix<double>& A,
 }
 
 // ==================== 功能测试用例 ====================
-
-/**
- * @test 验证 SuperLU_MT 后端基本可用性
- */
-TEST(SuperLUComprehensiveTest, BackendAvailability) {
-#ifdef HAVE_SUPERLU
-    EXPECT_TRUE(DirectBackendManager::isBackendAvailable(DirectBackendType::SUPERLU));
-    EXPECT_STREQ(DirectBackendManager::getBackendName(DirectBackendType::SUPERLU).c_str(), "SuperLU");
-    
-    auto backends = DirectBackendManager::getAvailableBackends();
-    bool found = std::find(backends.begin(), backends.end(), DirectBackendType::SUPERLU) != backends.end();
-    EXPECT_TRUE(found) << "SuperLU 后端应在可用列表中";
-    
-    FEEM_INFO("[功能测试] SuperLU_MT 后端可用性检测：通过");
-#else
-    GTEST_SKIP() << "SuperLU_MT 未编译进此构建";
-#endif
-}
 
 /**
  * @test 测试 3x3 小矩阵的 LU 分解和求解

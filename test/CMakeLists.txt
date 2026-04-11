@@ -101,21 +101,18 @@ target_link_libraries(test_sparse_matrix_gtest_stage1
     PRIVATE
         numeric_lib
         GTest::gtest
-        GTest::gtest_main
 )
 
 target_link_libraries(test_sparse_matrix_gtest_stage2
     PRIVATE
         numeric_lib
         GTest::gtest
-        GTest::gtest_main
 )
 
 target_link_libraries(test_sparse_matrix_gtest_stage3_simple
     PRIVATE
         numeric_lib
         GTest::gtest
-        GTest::gtest_main
 )
 
 # 电磁模块工具类测试
@@ -156,24 +153,29 @@ target_link_libraries(test_tool_modules
         pugixml_lib
         GTest::gtest
         GTest::gtest_main
-        OpenMP::OpenMP_CXX
 )
+
+if(USE_OPENMP AND TARGET OpenMP::OpenMP_CXX)
+    target_link_libraries(test_tool_modules PRIVATE OpenMP::OpenMP_CXX)
+endif()
 
 # Maxwell解析器测试
-# OpenMP基础测试
-add_executable(test_omp_basic
-    test_omp_basic.cpp
-)
+# OpenMP基础测试（仅在启用OpenMP时编译）
+if(USE_OPENMP)
+    add_executable(test_omp_basic
+        test_omp_basic.cpp
+    )
 
-target_include_directories(test_omp_basic
-    PRIVATE
-        ${CMAKE_SOURCE_DIR}/include
-)
+    target_include_directories(test_omp_basic
+        PRIVATE
+            ${CMAKE_SOURCE_DIR}/include
+    )
 
-target_link_libraries(test_omp_basic
-    PRIVATE
-        tool_lib
-)
+    target_link_libraries(test_omp_basic
+        PRIVATE
+            tool_lib
+    )
+endif()
 
 # MPI基础测试
 add_executable(test_mpi_basic
@@ -292,7 +294,6 @@ target_link_libraries(test_shape_function
         numeric_lib
         spdlog_lib
         GTest::gtest
-        GTest::gtest_main
 )
 
 add_test(NAME test_shape_function COMMAND test_shape_function)
@@ -315,7 +316,6 @@ target_link_libraries(test_em_element_integrator
         numeric_lib
         spdlog_lib
         GTest::gtest
-        GTest::gtest_main
 )
 
 add_test(NAME test_em_element_integrator COMMAND test_em_element_integrator)
@@ -577,7 +577,6 @@ if(MUMPS_AVAILABLE)
             tool_lib
             spdlog_lib
             GTest::gtest
-            GTest::gtest_main
             mumps_lib
     )
 
@@ -679,6 +678,30 @@ add_test(NAME test_eigen_extension COMMAND test_eigen_extension)
 #
 # add_test(NAME test_unified_solver COMMAND test_unified_solver)
 
+# ==================== CRTP 重构后 Eigen 求解器后端单元测试 ====================
+add_executable(test_eigen_solver_backends_crtp
+    test_eigen_solver_backends_crtp.cpp
+)
+
+target_include_directories(test_eigen_solver_backends_crtp
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/numeric
+        ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/lib/eigen
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+)
+
+target_link_libraries(test_eigen_solver_backends_crtp
+    PRIVATE
+        numeric_lib
+        tool_lib
+        spdlog_lib
+        GTest::gtest
+)
+
+add_test(NAME test_eigen_solver_backends_crtp COMMAND test_eigen_solver_backends_crtp)
+
 # 为所有链接了 fe_em_lib 或 numeric_lib 的测试目标添加 OpenMP 链接
 # （因为 Eigen 库在启用 OpenMP 时会使用 OpenMP 并行功能）
 if(USE_OPENMP AND TARGET OpenMP::OpenMP_CXX)
@@ -692,6 +715,7 @@ if(USE_OPENMP AND TARGET OpenMP::OpenMP_CXX)
         test_unified_solver test_eigen_extension
         test_mumps_context test_complex_mumps_context
         test_omp_basic
+        test_eigen_solver_backends_crtp  # 新增：CRTP 重构测试
     )
         if(TARGET ${test_target})
             target_link_libraries(${test_target} PRIVATE OpenMP::OpenMP_CXX)

@@ -35,7 +35,7 @@
 #pragma once
 
 #include "em_linear_solver.h"
-#include "em_sparse_converter.h"
+#include "sparse_converter.h"
 #include <Eigen/IterativeLinearSolvers>
 #include <Eigen/SparseCholesky>
 #include <memory>

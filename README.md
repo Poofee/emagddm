@@ -32,7 +32,13 @@ cd build/bin/Debug
 ```bash
 ./build/bin/Debug/fetidp_solver.exe
 ```
-
+cd build && cmake .. -DUSE_OPENMP=ON -DUSE_SUPERLU_MT=ON -DUSE_MUMPS=ON \
+    -DUSE_OPENBLAS=ON -DBUILD_MUMPS_FROM_SOURCE=ON \
+    -DCMAKE_C_COMPILER=/opt/homebrew/bin/gcc-15 \
+    -DCMAKE_CXX_COMPILER=/opt/homebrew/bin/g++-15 \
+    -DCMAKE_Fortran_COMPILER=/opt/homebrew/bin/gfortran-15 && \
+    make -j$(sysctl -n hw.ncpu)
+    
 ## 项目结构
 
 ```

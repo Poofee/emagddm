@@ -29,9 +29,9 @@
 #include <Eigen/SparseLU>
 #include <memory>
 
-#include "em_direct_solvers.h"
-#include "em_iterative_solvers.h"
-#include "em_sparse_converter.h"
+#include "direct_solvers.h"
+#include "iterative_solvers.h"
+#include "sparse_converter.h"
 #include "em_solver_factory.h"
 #include "unified_direct_solver.h"
 #include "coo_matrix.hpp"

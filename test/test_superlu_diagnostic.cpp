@@ -13,7 +13,7 @@
 #include "csr_matrix.hpp"
 #include "coo_matrix.hpp"
 #include "em_solver_backends.hpp"
-#include "em_direct_solvers.h"
+#include "direct_solvers.h"
 
 using namespace numeric;
 

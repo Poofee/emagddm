@@ -1,21 +1,18 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(dmumps C Fortran)
+project(mumps C Fortran)
 
-# ==================== 生成 mumps_int_def.h ====================
-# 从模板文件生成（32位整数模式，不使用 INTSIZE64）
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/mumps_int_def32_h.in
     ${CMAKE_CURRENT_SOURCE_DIR}/../include/mumps_int_def.h
     COPYONLY
 )
 
-# ==================== 双精度 MUMPS 源文件 ====================
-# 仅编译 dmumps 变体（d = double real arithmetic）
+# ==================== MUMPS 源文件定义 ====================
+# 架构：公共代码(mumps_common) + dmups专用 + zmumps专用
+# 避免 libdmumps.a 和 libzmumps.a 之间的重复符号
 
-# 通用 C 源文件
 set(MUMPS_COMMON_C_SOURCES
-    mumps_c.c
     mumps_addr.c
     mumps_common.c
     mumps_io.c
@@ -38,7 +35,6 @@ set(MUMPS_COMMON_C_SOURCES
     mumps_scotch64.c
 )
 
-# 通用 Fortran 源文件
 set(MUMPS_COMMON_F_SOURCES
     ana_AMDMF.F
     ana_blk.F
@@ -78,8 +74,7 @@ set(MUMPS_COMMON_F_SOURCES
     tools_common_m.F
 )
 
-# 双精度专用 Fortran 源文件 (d 前缀)
-set(DMUMPS_F_SOURCES
+set(DMUMPS_SOURCES
     dana_LDLT_preprocess.F
     dana_aux.F
     dana_aux_ELT.F
@@ -180,76 +175,10 @@ set(DMUMPS_F_SOURCES
     dstatic_ptr_m.F
     dtools.F
     dtype3_root.F
-)
-
-# 双精度专用 C 源文件
-set(DMUMPS_C_SOURCES
     dmumps_gpu.c
 )
 
-# ==================== 构建静态库 ====================
-add_library(dmumps STATIC
-    ${MUMPS_COMMON_C_SOURCES}
-    ${MUMPS_COMMON_F_SOURCES}
-    ${DMUMPS_F_SOURCES}
-    ${DMUMPS_C_SOURCES}
-)
-
-# ==================== 包含目录 ====================
-target_include_directories(dmumps PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/../include
-    ${MUMPS_BLAS_INCLUDE_DIRS}
-)
-
-# ==================== 链接依赖 ====================
-target_link_libraries(dmumps PUBLIC
-    pord
-    mpiseq
-    ${MUMPS_BLAS_LIBRARIES}
-)
-
-# ==================== 编译定义 ====================
-target_compile_definitions(dmumps PRIVATE
-    MUMPS_ARITH=MUMPS_ARITH_d
-    $<$<CONFIG:Release>:NO_TIMER>
-)
-
-if(MSVC)
-    target_compile_definitions(dmumps PRIVATE ADD_ MUMPS_SEQ_MPI)
-endif()
-
-# ==================== Fortran 预处理定义 ====================
-if(CMAKE_Fortran_COMPILER_ID MATCHES "Intel")
-    set_source_files_properties(
-        ${DMUMPS_F_SOURCES} ${MUMPS_COMMON_F_SOURCES}
-        PROPERTIES COMPILE_FLAGS "/fpp"
-    )
-elseif(CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
-    set_source_files_properties(
-        ${DMUMPS_F_SOURCES} ${MUMPS_COMMON_F_SOURCES}
-        PROPERTIES COMPILE_FLAGS "-cpp"
-    )
-endif()
-
-# ==================== 输出目录 ====================
-set_target_properties(dmumps PROPERTIES
-    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
-    Fortran_MODULE_DIRECTORY "${CMAKE_BINARY_DIR}/modules"
-)
-
-# ==================== 安装规则 ====================
-install(TARGETS dmumps pord mpiseq
-    ARCHIVE DESTINATION lib
-)
-
-# ============================================================
-# 复数 MUMPS (zmumps) 构建
-# ============================================================
-message(STATUS "========== 配置 MUMPS 复数版本 (zmumps) ==========")
-
-# 双精度复数专用 Fortran 源文件 (z 前缀)
-set(ZMUMPS_F_SOURCES
+set(ZMUMPS_SOURCES
     zana_LDLT_preprocess.F
     zana_aux.F
     zana_aux_ELT.F
@@ -351,67 +280,147 @@ set(ZMUMPS_F_SOURCES
     ztools.F
     ztype3_root.F
     zfac_type3_symmetrize.F
-)
-
-# 双精度复数专用 C 源文件
-set(ZMUMPS_C_SOURCES
     zmumps_gpu.c
 )
 
-# 构建复数静态库
-add_library(zmups STATIC
+# ==================== 公共库（Fortran/C 公共模块）====================
+add_library(mumps_common STATIC
     ${MUMPS_COMMON_C_SOURCES}
     ${MUMPS_COMMON_F_SOURCES}
-    ${ZMUMPS_F_SOURCES}
-    ${ZMUMPS_C_SOURCES}
 )
 
-target_include_directories(zmups PUBLIC
+target_include_directories(mumps_common PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../include
     ${MUMPS_BLAS_INCLUDE_DIRS}
 )
 
-target_link_libraries(zmups PUBLIC
+target_link_libraries(mumps_common PUBLIC
     pord
     mpiseq
     ${MUMPS_BLAS_LIBRARIES}
 )
 
-target_compile_definitions(zmups PRIVATE
+if(MSVC)
+    target_compile_definitions(mumps_common PRIVATE ADD_ MUMPS_SEQ_MPI)
+endif()
+
+if(CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
+    set_source_files_properties(
+        ${MUMPS_COMMON_F_SOURCES}
+        PROPERTIES COMPILE_FLAGS "-cpp")
+elseif(CMAKE_Fortran_COMPILER_ID MATCHES "Intel")
+    set_source_files_properties(
+        ${MUMPS_COMMON_F_SOURCES}
+        PROPERTIES COMPILE_FLAGS "/fpp")
+endif()
+
+set_target_properties(mumps_common PROPERTIES
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+    Fortran_MODULE_DIRECTORY "${CMAKE_BINARY_DIR}/modules"
+)
+
+# ==================== 实数 MUMPS (dmumps) ====================
+message(STATUS "========== 配置 MUMPS 实数版本 (dmumps) ==========")
+
+add_library(dmumps STATIC
+    mumps_c.c
+    ${DMUMPS_SOURCES}
+)
+
+# 确保 dmumps 在 mumps_common 之后编译（需要 .mod 文件）
+add_dependencies(dmumps mumps_common)
+
+target_include_directories(dmumps PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+    ${MUMPS_BLAS_INCLUDE_DIRS}
+    ${CMAKE_BINARY_DIR}/modules  # Fortran .mod 文件目录
+)
+
+target_link_libraries(dmumps PUBLIC mumps_common)
+
+target_compile_definitions(dmumps PRIVATE
+    MUMPS_ARITH=MUMPS_ARITH_d
+    $<$<CONFIG:Release>:NO_TIMER>
+)
+
+if(MSVC)
+    target_compile_definitions(dmumps PRIVATE ADD_ MUMPS_SEQ_MPI)
+endif()
+
+if(CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
+    set_source_files_properties(
+        ${DMUMPS_SOURCES}
+        PROPERTIES COMPILE_FLAGS "-cpp")
+elseif(CMAKE_Fortran_COMPILER_ID MATCHES "Intel")
+    set_source_files_properties(
+        ${DMUMPS_SOURCES}
+        PROPERTIES COMPILE_FLAGS "/fpp")
+endif()
+
+set_target_properties(dmumps PROPERTIES
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+)
+
+message(STATUS "========== MUMPS 实数版本 (dmumps) 配置完成 ==========")
+
+# ==================== 复数 MUMPS (zmumps) ==========================
+message(STATUS "========== 配置 MUMPS 复数版本 (zmumps) ==========")
+
+add_library(zmumps STATIC
+    mumps_c.c
+    ${ZMUMPS_SOURCES}
+)
+
+# 确保 zmumps 在 mumps_common 之后编译（需要 .mod 文件）
+add_dependencies(zmumps mumps_common)
+
+target_include_directories(zmumps PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+    ${MUMPS_BLAS_INCLUDE_DIRS}
+    ${CMAKE_BINARY_DIR}/modules  # Fortran .mod 文件目录
+)
+
+target_link_libraries(zmumps PUBLIC mumps_common)
+
+target_compile_definitions(zmumps PRIVATE
     MUMPS_ARITH=MUMPS_ARITH_z
     $<$<CONFIG:Release>:NO_TIMER>
 )
 
 if(MSVC)
-    target_compile_definitions(zmups PRIVATE ADD_ MUMPS_SEQ_MPI)
+    target_compile_definitions(zmumps PRIVATE ADD_ MUMPS_SEQ_MPI)
 endif()
 
-if(CMAKE_Fortran_COMPILER_ID MATCHES "Intel")
+if(CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
     set_source_files_properties(
-        ${ZMUMPS_F_SOURCES} ${MUMPS_COMMON_F_SOURCES}
-        PROPERTIES COMPILE_FLAGS "/fpp"
-    )
-elseif(CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
+        ${ZMUMPS_SOURCES}
+        PROPERTIES COMPILE_FLAGS "-cpp")
+elseif(CMAKE_Fortran_COMPILER_ID MATCHES "Intel")
     set_source_files_properties(
-        ${ZMUMPS_F_SOURCES} ${MUMPS_COMMON_F_SOURCES}
-        PROPERTIES COMPILE_FLAGS "-cpp"
-    )
+        ${ZMUMPS_SOURCES}
+        PROPERTIES COMPILE_FLAGS "/fpp")
 endif()
 
-set_target_properties(zmups PROPERTIES
+set_target_properties(zmumps PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
-    Fortran_MODULE_DIRECTORY "${CMAKE_BINARY_DIR}/modules"
-)
-
-install(TARGETS zmups
-    ARCHIVE DESTINATION lib
 )
 
 message(STATUS "========== MUMPS 复数版本 (zmumps) 配置完成 ==========")
 
-# ==================== 最终安装规则 ====================
+# ==================== 安装规则 ====================
+install(TARGETS mumps_common dmumps zmumps pord mpiseq
+    ARCHIVE DESTINATION lib
+)
+
 install(DIRECTORY ../include/
     DESTINATION include
     FILES_MATCHING PATTERN "*.h"
 )
+
+message(STATUS "========== MUMPS 三层库架构配置完成 ==========")
+message(STATUS "  - libmumps_common.a: 公共 Fortran/C 模块")
+message(STATUS "  - libdmumps.a:      实数 MUMPS (链接 mumps_common)")
+message(STATUS "  - libzmumps.a:      复数 MUMPS (链接 mumps_common)")

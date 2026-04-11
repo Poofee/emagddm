@@ -66,9 +66,9 @@ collect_sources(numeric_lib_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/numeric")
 
 # MUMPS 源文件从 numeric_lib 中排除，放入独立的 mumps_lib
 # SuperLU 源文件从 numeric_lib 中排除，放入独立的 superlu_lib
-list(FILTER numeric_lib_SOURCES EXCLUDE REGEX "em_direct_solvers_mumps\\.cpp$")
-list(FILTER numeric_lib_SOURCES EXCLUDE REGEX "em_direct_solvers_mumps_complex\\.cpp$")
-list(FILTER numeric_lib_SOURCES EXCLUDE REGEX "em_direct_solvers_superlu\\.cpp$")
+list(FILTER numeric_lib_SOURCES EXCLUDE REGEX "direct_solvers_mumps\\.cpp$")
+list(FILTER numeric_lib_SOURCES EXCLUDE REGEX "direct_solvers_mumps_complex\\.cpp$")
+list(FILTER numeric_lib_SOURCES EXCLUDE REGEX "direct_solvers_superlu\\.cpp$")
 
 # 新架构的后端源文件分离
 # MUMPS 后端放入 mumps_lib（隔离 Intel Fortran 运行时依赖）
@@ -97,7 +97,7 @@ target_link_libraries(numeric_lib
 # SuperLU_MT 独立编译单元
 if(SUPERLU_MT_AVAILABLE AND TARGET ${SUPERLU_MT_TARGET})
     add_library(superlu_lib STATIC
-        "${CMAKE_CURRENT_SOURCE_DIR}/numeric/em_direct_solvers_superlu.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/numeric/direct_solvers_superlu.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/numeric/superlu_solver_backend.cpp"  # 新架构：统一SuperLU后端
     )
 
@@ -119,20 +119,28 @@ if(SUPERLU_MT_AVAILABLE AND TARGET ${SUPERLU_MT_TARGET})
             spdlog_lib
     )
 
+    # macOS 链接器：将重复的 BLAS 符号标记为弱符号（允许与 OpenBLAS 共存）
+    # 原因：dcomplex.c 的 _c_abs/_z_abs 与 OpenBLAS 重复，但其他符号 (_z_abs1, _z_div 等) 是 SuperLU_MT 专有
+    if(APPLE)
+        target_link_options(superlu_lib PUBLIC
+            "SHELL:-Wl$<COMMA>-U$<COMMA>_c_abs"
+            "SHELL:-Wl$<COMMA>-U$<COMMA>_z_abs"
+        )
+    endif()
+
     # numeric_lib 需要 HAVE_SUPERLU 宏来编译 SuperLU 分支的 switch/case 代码
     # 同时需要链接 superlu_lib 来解析 SuperLU 符号
     target_compile_definitions(numeric_lib PRIVATE HAVE_SUPERLU)
     target_link_libraries(numeric_lib PUBLIC superlu_lib)
 
-    message(STATUS "  superlu_lib: em_direct_solvers_superlu.cpp (HAVE_SUPERLU defined)")
+    message(STATUS "  superlu_lib: direct_solvers_superlu.cpp (HAVE_SUPERLU defined)")
     message(STATUS "  numeric_lib: HAVE_SUPERLU defined (SuperLU symbols resolved via superlu_lib)")
 endif()
 
 # MUMPS 独立编译单元（隔离 Intel Fortran 运行时依赖）
 if(MUMPS_AVAILABLE)
     add_library(mumps_lib STATIC
-        "${CMAKE_CURRENT_SOURCE_DIR}/numeric/em_direct_solvers_mumps.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/numeric/em_direct_solvers_mumps_complex.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/numeric/direct_solvers_mumps.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/numeric/mumps_solver_backend.cpp"  # 新架构：统一MUMPS后端
     )
 
@@ -150,11 +158,20 @@ if(MUMPS_AVAILABLE)
 
     target_link_libraries(mumps_lib
         PUBLIC
-            dmumps zmumps pord_mumps mpiseq openblas
+            mumps_common dmumps zmumps pord_mumps mpiseq
         PRIVATE
             include_lib
             spdlog_lib
     )
+
+    # macOS 链接器需要 -Wl,-all_load 来确保从静态库中提取所有目标文件
+    # 原因：Apple ld 默认只提取解决当前未定义符号所需的目标文件，
+    #       但 MUMPS 的 C 接口 (mumps_c.c.o) 引用的 Fortran 符号 (dmumps_f77.F.o)
+    #       可能在同一静态库中，导致链接器无法自动解析交叉引用
+    if(APPLE)
+        target_link_options(mumps_lib PUBLIC -Wl,-all_load)
+        target_link_libraries(mumps_lib PUBLIC gfortran)
+    endif()
 
     # /nofor_main 仅对 Intel xilink.exe 有效，MSVC link.exe 不识别
     # 改用 MAIN__ stub 函数解决 Fortran 运行时 main 冲突
@@ -169,7 +186,7 @@ if(MUMPS_AVAILABLE)
     target_compile_definitions(numeric_lib PRIVATE HAVE_MUMPS)
     target_link_libraries(numeric_lib PUBLIC mumps_lib)
 
-    message(STATUS "  mumps_lib: em_direct_solvers_mumps.cpp (HAVE_MUMPS defined)")
+    message(STATUS "  mumps_lib: direct_solvers_mumps.cpp (HAVE_MUMPS defined)")
     message(STATUS "  numeric_lib: HAVE_MUMPS defined (MUMPS symbols resolved via mumps_lib)")
 else()
     message(STATUS "  numeric_lib: MUMPS not available")

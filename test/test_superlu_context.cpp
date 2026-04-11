@@ -28,9 +28,9 @@
 #include <Eigen/Sparse>
 
 #ifdef HAVE_SUPERLU
-    #include "em_direct_solvers.h"
+    #include "direct_solvers.h"
 #else
-    #include "em_direct_solvers.h"
+    #include "direct_solvers.h"
 #endif
 
 #include "csr_matrix.hpp"

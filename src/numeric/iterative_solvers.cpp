@@ -1,5 +1,5 @@
 /**
- * @file em_iterative_solvers.cpp
+ * @file iterative_solvers.cpp
  * @brief 核心数值层 - 高性能迭代求解器与AMG预条件子框架实现
  * @details 实现CGSolver、BiCGSTABSolver、ScalarAMG等组件的完整功能，
  *          包括预条件子设置、迭代求解核心逻辑、AMG多层次构建和V/W循环。
@@ -14,7 +14,7 @@
  * @version 1.0
  */
 
-#include "em_iterative_solvers.h"
+#include "iterative_solvers.h"
 #include "logger_factory.hpp"
 
 namespace numeric {

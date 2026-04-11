@@ -1,5 +1,5 @@
 /**
- * @file em_sparse_converter.h
+ * @file sparse_converter.h
  * @brief 核心数值层 - CSR矩阵与Eigen稀疏矩阵转换工具类
  * @details 提供项目自定义CsrMatrix<double>与Eigen::SparseMatrix<double>之间的双向无缝转换功能，
  *          支持性能统计、维度校验、大型矩阵优化等特性

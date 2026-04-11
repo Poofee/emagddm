@@ -28,7 +28,7 @@
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 
-#include "em_direct_solvers.h"
+#include "direct_solvers.h"
 #include "logger_factory.hpp"
 
 #if !HAVE_MUMPS

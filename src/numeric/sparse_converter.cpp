@@ -1,5 +1,5 @@
 /**
- * @file em_sparse_converter.cpp
+ * @file sparse_converter.cpp
  * @brief 核心数值层 - CSR矩阵与Eigen稀疏矩阵转换工具类实现
  * @details 实现SparseConverter类的所有方法，包括双向转换、维度校验、性能统计等功能
  * @author Poofee
@@ -7,7 +7,7 @@
  * @version 1.0
  */
 
-#include "em_sparse_converter.h"
+#include "sparse_converter.h"
 #include "coo_matrix.hpp"
 #include "logger_factory.hpp"
 

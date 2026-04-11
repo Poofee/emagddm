@@ -7,6 +7,7 @@
  */
 
 #include "sparse_matrix.hpp"
+#include "matrix_market_io_impl.hpp"  // MatrixMarketIO 实现（从此处统一编译）
 
 namespace numeric {
 

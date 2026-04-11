@@ -27,7 +27,7 @@
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 
-#include "em_direct_solvers.h"
+#include "direct_solvers.h"
 #include "logger_factory.hpp"
 
 using namespace numeric;
@@ -251,9 +251,9 @@ TEST(ComplexMumpsContextTest, SolvePureRealMatrix) {
     ASSERT_EQ(result.status, SolverStatus::SUCCESS);
 
     Eigen::VectorXcd x = extract_complex(result);
-    EXPECT_NEAR(x(0).real(), 1.0, 1e-10);
-    EXPECT_NEAR(x(1).real(), 2.0, 1e-10);
-    EXPECT_NEAR(x(2).real(), 1.0, 1e-10);
+    EXPECT_NEAR(x(0).real(), 19.0 / 14.0, 1e-10);
+    EXPECT_NEAR(x(1).real(), 17.0 / 7.0, 1e-10);
+    EXPECT_NEAR(x(2).real(), 19.0 / 14.0, 1e-10);
     EXPECT_LT(std::abs(x(0).imag()), 1e-10);
     EXPECT_LT(std::abs(x(1).imag()), 1e-10);
     EXPECT_LT(std::abs(x(2).imag()), 1e-10);

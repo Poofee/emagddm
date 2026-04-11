@@ -31,9 +31,9 @@
 
 #include "logger_factory.hpp"
 #include "csr_matrix.hpp"
-#include "em_sparse_converter.h"
-#include "em_direct_solvers.h"
-#include "em_iterative_solvers.h"
+#include "sparse_converter.h"
+#include "direct_solvers.h"
+#include "iterative_solvers.h"
 
 using namespace numeric;
 

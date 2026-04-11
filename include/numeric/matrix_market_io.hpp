@@ -182,5 +182,5 @@ private:
 
 } // namespace numeric
 
-// 包含实现
-#include "matrix_market_io_impl.hpp"
+// 注意：实现已移至 src/numeric/sparse_matrix.cpp
+// 避免头文件中的非 inline 函数定义导致多重定义错误

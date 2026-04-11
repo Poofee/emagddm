@@ -1,5 +1,5 @@
 /**
- * @file em_direct_solvers_superlu.cpp
+ * @file direct_solvers_superlu.cpp
  * @brief SuperluContext RAII 封装类完整实现
  * @details 实现 SuperluContext 类的全部方法，封装 SuperLU_MT 库的并行 LU 分解功能。
  *
@@ -14,7 +14,7 @@
  * @version 2.0 (重构版 - 移除旧求解器类引用)
  */
 
-#include "em_direct_solvers.h"
+#include "direct_solvers.h"
 #include "logger_factory.hpp"
 #include <stdexcept>
 #include <cstring>

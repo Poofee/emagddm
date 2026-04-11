@@ -30,9 +30,9 @@
 #include <Eigen/Sparse>
 
 #ifdef HAVE_SUPERLU
-    #include "em_direct_solvers.h"
+    #include "direct_solvers.h"
 #else
-    #include "em_direct_solvers.h"
+    #include "direct_solvers.h"
 #endif
 
 #include "csr_matrix.hpp"
@@ -150,30 +150,6 @@ double compute_error(const Eigen::VectorXd& computed, const std::vector<double>&
     return (computed - e).norm();
 }
 
-
-// ==================== 单元测试用例 ====================
-
-/**
- * @test 测试SuperLU_MT后端的编译期和运行时可用性
- */
-TEST(SuperLUMTIntegrationTest, BackendAvailability) {
-#ifdef HAVE_SUPERLU
-    EXPECT_TRUE(DirectBackendManager::isBackendAvailable(DirectBackendType::SUPERLU));
-    EXPECT_EQ(DirectBackendManager::getBackendName(DirectBackendType::SUPERLU), "SuperLU");
-
-    auto backends = DirectBackendManager::getAvailableBackends();
-    bool found_superlu = false;
-    for (auto& b : backends) {
-        if (b == DirectBackendType::SUPERLU) {
-            found_superlu = true;
-            break;
-        }
-    }
-    EXPECT_TRUE(found_superlu) << "SuperLU后端应在可用后端列表中";
-#else
-    GTEST_SKIP() << "SuperLU_MT未编译进此构建（HAVE_SUPERLU未定义）";
-#endif
-}
 
 /**
  * @test 测试 SPD 矩阵的小规模求解（5x5）- SuperLU_MT 后端

@@ -27,8 +27,8 @@
 #include <iostream>
 #include <cmath>
 
-#include "em_direct_solvers.h"
-#include "em_sparse_converter.h"
+#include "direct_solvers.h"
+#include "sparse_converter.h"
 #include "logger_factory.hpp"
 
 using namespace numeric;

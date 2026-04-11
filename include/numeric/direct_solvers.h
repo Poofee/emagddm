@@ -1,11 +1,10 @@
 /**
- * @file em_direct_solvers.h
+ * @file direct_solvers.h
  * @brief 求解器后端辅助类定义（SuperLU/MUMPS RAII 封装）
  * @details 提供求解器后端所需的辅助数据结构封装：
  *          - SuperluContext：SuperLU_MT 数据结构 RAII 封装
  *          - MumpsContext：MUMPS 实数求解器 RAII 封装
  *          - ComplexMumpsContext：MUMPS 复数求解器 RAII 封装
- *          - DirectBackendManager：后端可用性管理器
  *
  * @note 原三个直接求解器类（SymmetricDirectSolver/SymmetricIndefiniteDirectSolver/GeneralDirectSolver）
  *       已迁移至新架构（UnifiedDirectSolver + SolverBackend 策略模式），本文件仅保留辅助类。
@@ -22,7 +21,7 @@
 #pragma once
 
 #include "em_linear_solver.h"
-#include "em_sparse_converter.h"
+#include "sparse_converter.h"
 #include "em_solver_backends.hpp"
 #include <Eigen/SparseCholesky>
 #include <Eigen/SparseLU>
@@ -181,18 +180,5 @@ inline Eigen::VectorXcd extract_complex(const SolverResult& result) {
 
 #endif  // HAVE_MUMPS
 
-/**
- * @class DirectBackendManager
- * @brief 直接求解器后端可用性管理器
- */
-class DirectBackendManager {
-public:
-    static bool isBackendAvailable(DirectBackendType type);
-    static std::string getBackendName(DirectBackendType type);
-    static std::vector<DirectBackendType> getAvailableBackends();
-
-private:
-    DirectBackendManager() = delete;
-};
 
 } // namespace numeric

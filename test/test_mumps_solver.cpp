@@ -41,8 +41,8 @@
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 
-#include "em_direct_solvers.h"
-#include "em_sparse_converter.h"
+#include "direct_solvers.h"
+#include "sparse_converter.h"
 #include "coo_matrix.hpp"
 #include "csr_matrix.hpp"
 #include "logger_factory.hpp"

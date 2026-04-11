@@ -74,7 +74,7 @@
 #include "eigen_solver_backends.h"
 #include "mumps_solver_backend.h"
 #include "superlu_solver_backend.h"
-#include "em_iterative_solvers.h"
+#include "iterative_solvers.h"
 #include "matrix_attribute.hpp"
 #include "logger_factory.hpp"
 #include <memory>

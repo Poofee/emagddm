@@ -17,8 +17,8 @@
 
 #include "mumps_solver_backend.h"
 #include "em_solver_backends.hpp"  // 必须：定义 HAVE_MUMPS 宏 + MUMPS 头文件
-#include "em_direct_solvers.h"     // 使用 MumpsContext / ComplexMumpsContext / extract_complex
-#include "em_sparse_converter.h"   // SparseConverter 工具类
+#include "direct_solvers.h"     // 使用 MumpsContext / ComplexMumpsContext / extract_complex
+#include "sparse_converter.h"   // SparseConverter 工具类
 #include "logger_factory.hpp"
 #include <stdexcept>
 
@@ -206,7 +206,7 @@ void MUMPSBackend::set_matrix(const CsrMatrix<std::complex<double>>& A) {
  * @note ComplexMumpsContext::solve() 返回的 raw_result.x 为实数向量（长度 2n），按 [Re,Im,...] 排列
  * @note 使用 extract_complex 辅助函数进行格式转换
  *
- * @note 原代码位置：solve_mumps_complex_helper() (em_direct_solvers_mumps_complex.cpp:121)
+ * @note 原代码位置：solve_mumps_complex_helper() (direct_solvers_mumps_complex.cpp:121)
  */
 Eigen::VectorXcd MUMPSBackend::solve_complex(const Eigen::VectorXcd& b) {
     if (!matrix_set_complex_ || !mumps_ctx_complex_ || !mumps_ctx_complex_->is_factored()) {

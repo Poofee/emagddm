@@ -362,7 +362,26 @@ if(USE_SUPERLU_MT)
 
     # SuperLU_MT 编译选项设置
     set(PLAT "_OPENMP" CACHE STRING "SuperLU_MT threading flavor (OpenMP)" FORCE)
-    set(enable_internal_blaslib ON CACHE BOOL "Build internal CBLAS for SuperLU_MT" FORCE)
+
+    # 禁用内置 CBLAS，使用外部 OpenBLAS（避免 35 个重复 BLAS 符号错误）
+    # 条件：仅当 OpenBLAS 启用时才禁用内部 CBLAS
+    if(USE_OPENBLAS)
+        set(enable_internal_blaslib OFF CACHE BOOL "Use external OpenBLAS for SuperLU_MT" FORCE)
+        # 直接计算 OpenBLAS 静态库路径（不依赖 target，因为 OpenBLAS 在后面配置）
+        set(_OPENBLAS_LIB_PATH "${CMAKE_BINARY_DIR}/openblas_build/lib/libopenblas.a")
+        if(EXISTS "${_OPENBLAS_LIB_PATH}")
+            set(TPL_BLAS_LIBRARIES "${_OPENBLAS_LIB_PATH}" CACHE FILEPATH "External BLAS for SuperLU_MT" FORCE)
+            message(STATUS "  SuperLU_MT: 使用外部 OpenBLAS (${_OPENBLAS_LIB_PATH})")
+        else()
+            # 回退到内置 CBLAS（OpenBLAS 尚未编译）
+            set(enable_internal_blaslib ON CACHE BOOL "Build internal CBLAS for SuperLU_MT" FORCE)
+            message(STATUS "  SuperLU_MT: OpenBLAS 未找到，回退到内置 CBLAS")
+        endif()
+    else()
+        set(enable_internal_blaslib ON CACHE BOOL "Build internal CBLAS for SuperLU_MT" FORCE)
+        message(STATUS "  SuperLU_MT: 使用内置 CBLAS")
+    endif()
+
     set(enable_double ON CACHE BOOL "Enable double precision" FORCE)
     set(enable_single OFF CACHE BOOL "Disable single precision" FORCE)
     set(enable_complex OFF CACHE BOOL "Disable complex precision" FORCE)
@@ -462,7 +481,7 @@ if(USE_OPENBLAS)
                 BUILD_LAPACK_DEPRECATED=1
                 USE_OPENMP=0
                 USE_THREAD=0
-                NUM_THREADS=24
+                NUM_THREADS=${NUM_CORES}
                 DYNAMIC_ARCH=0
             )
 
@@ -767,13 +786,23 @@ if(USE_MUMPS)
                 COMMENT "Building MUMPS from source..."
                 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
                 BYPRODUCTS
+                    ${MUMPS_BUILD_DIR}/lib/libmumps_common.a
                     ${MUMPS_BUILD_DIR}/lib/libdmumps.a
-                    ${MUMPS_BUILD_DIR}/lib/libzmups.a
+                    ${MUMPS_BUILD_DIR}/lib/libzmumps.a
                     ${MUMPS_BUILD_DIR}/lib/libpord.a
                     ${MUMPS_BUILD_DIR}/lib/libmpiseq.a
             )
 
-            # 导入 MUMPS 目标
+            # 导入 MUMPS 三层库架构
+            # mumps_common: 公共 Fortran/C 模块（只链接一次，避免重复符号）
+            add_library(mumps_common STATIC IMPORTED GLOBAL)
+            set_target_properties(mumps_common PROPERTIES
+                IMPORTED_LOCATION "${MUMPS_BUILD_DIR}/lib/libmumps_common.a"
+                INTERFACE_INCLUDE_DIRECTORIES "${MUMPS_ROOT}/include;${MUMPS_ROOT}/libseq"
+            )
+            add_dependencies(mumps_common mumps_build)
+
+            # dmups: 实数 MUMPS（依赖 mumps_common）
             add_library(dmumps STATIC IMPORTED GLOBAL)
             set_target_properties(dmumps PROPERTIES
                 IMPORTED_LOCATION "${MUMPS_BUILD_DIR}/lib/libdmumps.a"
@@ -781,12 +810,13 @@ if(USE_MUMPS)
             )
             add_dependencies(dmumps mumps_build)
 
-            add_library(zmups STATIC IMPORTED GLOBAL)
-            set_target_properties(zmups PROPERTIES
-                IMPORTED_LOCATION "${MUMPS_BUILD_DIR}/lib/libzmups.a"
+            # zmumps: 复数 MUMPS（依赖 mumps_common）
+            add_library(zmumps STATIC IMPORTED GLOBAL)
+            set_target_properties(zmumps PROPERTIES
+                IMPORTED_LOCATION "${MUMPS_BUILD_DIR}/lib/libzmumps.a"
                 INTERFACE_INCLUDE_DIRECTORIES "${MUMPS_ROOT}/include;${MUMPS_ROOT}/libseq"
             )
-            add_dependencies(zmups mumps_build)
+            add_dependencies(zmumps mumps_build)
 
             add_library(pord_mumps STATIC IMPORTED GLOBAL)
             set_target_properties(pord_mumps PROPERTIES
@@ -802,15 +832,17 @@ if(USE_MUMPS)
             )
             add_dependencies(mpiseq mumps_build)
 
-            # 创建 mumps_components 别名（包含所有 MUMPS 组件库）
+            # MUMPS 组件集合（三层架构：common + dmumps + zmumps + 依赖）
             add_library(mumps_components INTERFACE IMPORTED GLOBAL)
-            target_link_libraries(mumps_components INTERFACE dmumps zmups pord_mumps mpiseq openblas)
+            target_link_libraries(mumps_components INTERFACE mumps_common dmumps zmumps pord_mumps mpiseq openblas)
 
             set(MUMPS_AVAILABLE TRUE)
             include_directories(${MUMPS_ROOT}/include)
             include_directories(${MUMPS_ROOT}/libseq)
-            message(STATUS "  [Unix] MUMPS 从源码编译完成 (静态库)")
-            message(STATUS "    [Unix] MUMPS 库: ${MUMPS_BUILD_DIR}/lib/libdmumps.a")
+            message(STATUS "  [Unix] MUMPS 从源码编译完成 (三层库架构)")
+            message(STATUS "    [Unix] MUMPS 公共库: ${MUMPS_BUILD_DIR}/lib/libmumps_common.a")
+            message(STATUS "    [Unix] MUMPS 实数库: ${MUMPS_BUILD_DIR}/lib/libdmumps.a")
+            message(STATUS "    [Unix] MUMPS 复数库: ${MUMPS_BUILD_DIR}/lib/libzmumps.a")
 
         else()
             # ============================================================

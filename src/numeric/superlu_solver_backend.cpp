@@ -10,7 +10,7 @@
  * - 完整的错误处理和日志输出
  *
  * @par 代码迁移来源：
- * - 原代码位置：SymmetricDirectSolver::decompose_with_superlu() (em_direct_solvers_superlu.cpp:395)
+ * - 原代码位置：SymmetricDirectSolver::decompose_with_superlu() (direct_solvers_superlu.cpp:395)
  *
  * @par 性能特征：
  * - 支持多线程并行消元（PORD 排序 + 并行 pdgstrf）
@@ -23,8 +23,8 @@
  */
 
 #include "superlu_solver_backend.h"
-#include "em_direct_solvers.h"     // 使用 SuperluContext
-#include "em_sparse_converter.h"   // SparseConverter 工具类
+#include "direct_solvers.h"     // 使用 SuperluContext
+#include "sparse_converter.h"   // SparseConverter 工具类
 #include "logger_factory.hpp"
 #include <stdexcept>
 #include <cstring>
