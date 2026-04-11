@@ -40,6 +40,7 @@ set(MUMPS_COMMON_C_SOURCES
 
 # 通用 Fortran 源文件
 set(MUMPS_COMMON_F_SOURCES
+    ana_AMDMF.F
     ana_blk.F
     ana_blk_m.F
     ana_omp_m.F
@@ -65,6 +66,7 @@ set(MUMPS_COMMON_F_SOURCES
     mumps_memory_mod.F
     mumps_ooc_common.F
     mumps_pivnul_mod.F
+    mumps_print_defined.F
     mumps_static_mapping.F
     mumps_type2_blocking.F
     mumps_version.F
@@ -149,6 +151,7 @@ set(DMUMPS_F_SOURCES
     dmumps_config_file.F
     dmumps_driver.F
     dmumps_f77.F
+    dmumps_iXamax.F
     dmumps_intr_types.F
     dmumps_lr_data_m.F
     dmumps_mpi3_mod.F
@@ -240,6 +243,174 @@ install(TARGETS dmumps pord mpiseq
     ARCHIVE DESTINATION lib
 )
 
+# ============================================================
+# 复数 MUMPS (zmumps) 构建
+# ============================================================
+message(STATUS "========== 配置 MUMPS 复数版本 (zmumps) ==========")
+
+# 双精度复数专用 Fortran 源文件 (z 前缀)
+set(ZMUMPS_F_SOURCES
+    zana_LDLT_preprocess.F
+    zana_aux.F
+    zana_aux_ELT.F
+    zana_aux_par.F
+    zana_dist_m.F
+    zana_driver.F
+    zana_lr.F
+    zana_mtrans.F
+    zana_reordertree.F
+    zarrowheads.F
+    zbcast_int.F
+    zend_driver.F
+    zfac_asm.F
+    zfac_asm_ELT.F
+    zfac_asm_master_ELT_m.F
+    zfac_asm_master_m.F
+    zfac_b.F
+    zfac_compact_factors_m.F
+    zfac_determinant.F
+    zfac_diag.F
+    zfac_dist_arrowheads_omp.F
+    zfac_distrib_ELT.F
+    zfac_distrib_distentry.F
+    zfac_driver.F
+    zfac_front_LDLT_type1.F
+    zfac_front_LDLT_type2.F
+    zfac_front_LU_type1.F
+    zfac_front_LU_type2.F
+    zfac_front_aux.F
+    zfac_front_type2_aux.F
+    zfac_lastrtnelind.F
+    zfac_lr.F
+    zfac_mem_alloc_cb.F
+    zfac_mem_compress_cb.F
+    zfac_mem_dynamic.F
+    zfac_mem_free_block_cb.F
+    zfac_mem_stack.F
+    zfac_mem_stack_aux.F
+    zfac_omp_m.F
+    zfac_par_m.F
+    zfac_process_band.F
+    zfac_process_bf.F
+    zfac_process_blfac_slave.F
+    zfac_process_blocfacto.F
+    zfac_process_blocfacto_LDLT.F
+    zfac_process_contrib_type1.F
+    zfac_process_contrib_type2.F
+    zfac_process_contrib_type3.F
+    zfac_process_end_facto_slave.F
+    zfac_process_maprow.F
+    zfac_process_master2.F
+    zfac_process_message.F
+    zfac_process_root2slave.F
+    zfac_process_root2son.F
+    zfac_process_rtnelind.F
+    zfac_root_parallel.F
+    zfac_scalings.F
+    zfac_scalings_simScaleAbs.F
+    zfac_scalings_simScale_util.F
+    zfac_sispointers_m.F
+    zfac_sol_l0omp_m.F
+    zfac_sol_pool.F
+    ztype3_root.F
+    zini_defaults.F
+    zini_driver.F
+    zlr_core.F
+    zlr_type.F
+    zmumps_comm_buffer.F
+    zmumps_config_file.F
+    zmumps_driver.F
+    zmumps_f77.F
+    zmumps_iXamax.F
+    zmumps_intr_types.F
+    zmumps_lr_data_m.F
+    zmumps_mpi3_mod.F
+    zmumps_ooc.F
+    zmumps_ooc_buffer.F
+    zmumps_save_restore.F
+    zmumps_save_restore_files.F
+    zmumps_sol_es.F
+    zmumps_struc_def.F
+    zomp_tps_m.F
+    zooc_panel_piv.F
+    zrank_revealing.F
+    zsol_aux.F
+    zsol_bwd.F
+    zsol_bwd_aux.F
+    zsol_c.F
+    zsol_distrhs.F
+    zsol_distsol.F
+    zsol_driver.F
+    zsol_fwd.F
+    zsol_fwd_aux.F
+    zsol_lr.F
+    zsol_matvec.F
+    zsol_omp_m.F
+    zsol_root_parallel.F
+    zstatic_ptr_m.F
+    ztools.F
+    ztype3_root.F
+    zfac_type3_symmetrize.F
+)
+
+# 双精度复数专用 C 源文件
+set(ZMUMPS_C_SOURCES
+    zmumps_gpu.c
+)
+
+# 构建复数静态库
+add_library(zmups STATIC
+    ${MUMPS_COMMON_C_SOURCES}
+    ${MUMPS_COMMON_F_SOURCES}
+    ${ZMUMPS_F_SOURCES}
+    ${ZMUMPS_C_SOURCES}
+)
+
+target_include_directories(zmups PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+    ${MUMPS_BLAS_INCLUDE_DIRS}
+)
+
+target_link_libraries(zmups PUBLIC
+    pord
+    mpiseq
+    ${MUMPS_BLAS_LIBRARIES}
+)
+
+target_compile_definitions(zmups PRIVATE
+    MUMPS_ARITH=MUMPS_ARITH_z
+    $<$<CONFIG:Release>:NO_TIMER>
+)
+
+if(MSVC)
+    target_compile_definitions(zmups PRIVATE ADD_ MUMPS_SEQ_MPI)
+endif()
+
+if(CMAKE_Fortran_COMPILER_ID MATCHES "Intel")
+    set_source_files_properties(
+        ${ZMUMPS_F_SOURCES} ${MUMPS_COMMON_F_SOURCES}
+        PROPERTIES COMPILE_FLAGS "/fpp"
+    )
+elseif(CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
+    set_source_files_properties(
+        ${ZMUMPS_F_SOURCES} ${MUMPS_COMMON_F_SOURCES}
+        PROPERTIES COMPILE_FLAGS "-cpp"
+    )
+endif()
+
+set_target_properties(zmups PROPERTIES
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+    Fortran_MODULE_DIRECTORY "${CMAKE_BINARY_DIR}/modules"
+)
+
+install(TARGETS zmups
+    ARCHIVE DESTINATION lib
+)
+
+message(STATUS "========== MUMPS 复数版本 (zmumps) 配置完成 ==========")
+
+# ==================== 最终安装规则 ====================
 install(DIRECTORY ../include/
     DESTINATION include
     FILES_MATCHING PATTERN "*.h"

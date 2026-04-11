@@ -321,6 +321,18 @@ int ComplexMumpsContext::factorize_from_csr(const CsrMatrix<std::complex<double>
     return factorize(n, nz, irn_storage_.data(), jcn_storage_.data(), a_storage_.data());
 }
 
+bool ComplexMumpsContext::is_factored() const {
+    return state_ == State::FACTORIZED;
+}
+
+bool ComplexMumpsContext::is_initialized() const {
+    return state_ != State::UNINITIALIZED;
+}
+
+int ComplexMumpsContext::matrix_size() const {
+    return n_;
+}
+
 } // namespace numeric
 
 #endif // HAVE_MUMPS

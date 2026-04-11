@@ -9,6 +9,7 @@ build/
 *.ilk
 *.exp
 *.mod
+*.o
 
 # CMake缓存
 CMakeCache.txt

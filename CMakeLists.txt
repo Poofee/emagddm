@@ -407,20 +407,223 @@ else()
 endif()
 
 # ============================================================
+# OpenBLAS 配置（高性能 BLAS 库，MUMPS 依赖）
+# 跨平台支持：
+# - Windows:   使用预编译的静态库
+# - Linux:     使用系统包管理器或从源码编译
+# - macOS:     从源码编译（针对 Apple Silicon 优化）
+# ============================================================
+option(USE_OPENBLAS "从源码编译 OpenBLAS (MUMPS依赖)" OFF)
+
+if(USE_OPENBLAS)
+    message(STATUS "==========================================")
+    message(STATUS "  OpenBLAS 配置 (跨平台)")
+    message(STATUS "==========================================")
+
+    set(OPENBLAS_ROOT "${CMAKE_SOURCE_DIR}/lib/OpenBLAS")
+    set(OPENBLAS_BUILD_DIR "${CMAKE_BINARY_DIR}/openblas_build")
+
+    if(IS_MACOS AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
+        # ============================================================
+        # macOS Apple Silicon (arm64) 特殊配置
+        # 使用 OpenBLAS 自带的 Makefile.arm64 进行优化编译
+        # ============================================================
+        message(STATUS "  [macOS/arm64] 检测到 Apple Silicon，使用优化的 ARM64 构建")
+
+        # 检查是否已编译
+        set(OPENBLAS_STATIC_LIB "${OPENBLAS_BUILD_DIR}/lib/libopenblas.a")
+
+        if(NOT EXISTS ${OPENBLAS_STATIC_LIB})
+            message(STATUS "  [macOS] 开始编译 OpenBLAS (ARM64 优化版本)...")
+
+            # 创建构建目录
+            file(MAKE_DIRECTORY ${OPENBLAS_BUILD_DIR})
+
+            # 设置编译参数（针对 Apple Silicon M1/M2/M3/M4 优化）
+            find_program(GFORTRAN_EXECUTABLE gfortran)
+            if(NOT GFORTRAN_EXECUTABLE)
+                message(FATAL_ERROR "OpenBLAS 需要 Fortran 编译器 (gfortran)。请安装: brew install gcc")
+            endif()
+
+            # 获取 CPU 核心数用于并行编译
+            execute_process(
+                COMMAND sysctl -n hw.ncpu
+                OUTPUT_VARIABLE NUM_CORES
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+            )
+
+            set(OPENBLAS_MAKE_ARGS
+                TARGET=ARMV8
+                CC=${CMAKE_C_COMPILER}
+                FC=${GFORTRAN_EXECUTABLE}
+                PREFIX=${OPENBLAS_BUILD_DIR}
+                NO_LAPACK=0
+                NO_LAPACKE=0
+                BUILD_LAPACK_DEPRECATED=1
+                USE_OPENMP=0
+                USE_THREAD=0
+                NUM_THREADS=24
+                DYNAMIC_ARCH=0
+            )
+
+            # 执行 make 编译（使用多核并行编译）
+            execute_process(
+                COMMAND make -j${NUM_CORES} ${OPENBLAS_MAKE_ARGS} all
+                WORKING_DIRECTORY ${OPENBLAS_ROOT}
+                RESULT_VARIABLE OPENBLAS_MAKE_RESULT
+                OUTPUT_VARIABLE OPENBLAS_MAKE_OUTPUT
+                ERROR_VARIABLE OPENBLAS_MAKE_ERROR
+                TIMEOUT 900
+            )
+
+            if(NOT OPENBLAS_MAKE_RESULT EQUAL 0)
+                message(FATAL_ERROR "OpenBLAS 编译失败: ${OPENBLAS_MAKE_ERROR}")
+            endif()
+
+            # 安装到构建目录
+            execute_process(
+                COMMAND make ${OPENBLAS_MAKE_ARGS} install
+                WORKING_DIRECTORY ${OPENBLAS_ROOT}
+                RESULT_VARIABLE OPENBLAS_INSTALL_RESULT
+                OUTPUT_VARIABLE OPENBLAS_INSTALL_OUTPUT
+                ERROR_VARIABLE OPENBLAS_INSTALL_ERROR
+                TIMEOUT 300
+            )
+
+            if(NOT OPENBLAS_INSTALL_RESULT EQUAL 0)
+                message(FATAL_ERROR "OpenBLAS 安装失败: ${OPENBLAS_INSTALL_ERROR}")
+            endif()
+
+            message(STATUS "  [macOS] OpenBLAS 编译完成")
+        else()
+            message(STATUS "  [macOS] 使用已编译的 OpenBLAS 库")
+        endif()
+
+        # 验证库文件存在
+        if(EXISTS ${OPENBLAS_STATIC_LIB})
+            message(STATUS "  [macOS] OpenBLAS 静态库: ${OPENBLAS_STATIC_LIB}")
+
+            # 导入预编译的静态库
+            add_library(openblas STATIC IMPORTED GLOBAL)
+            set_target_properties(openblas PROPERTIES
+                IMPORTED_LOCATION "${OPENBLAS_STATIC_LIB}"
+                INTERFACE_INCLUDE_DIRECTORIES "${OPENBLAS_BUILD_DIR}/include"
+            )
+
+            set(OPENBLAS_AVAILABLE TRUE)
+            message(STATUS "  [macOS] OpenBLAS 配置完成 (ARM64 优化静态库)")
+        else()
+            message(WARNING "  [macOS] OpenBLAS 编译后未找到库文件: ${OPENBLAS_STATIC_LIB}")
+            set(OPENBLAS_AVAILABLE FALSE)
+        endif()
+
+    elseif(IS_LINUX OR IS_MACOS)
+        # ============================================================
+        # Linux 或 macOS x86_64：使用 CMake 构建或查找系统库
+        # ============================================================
+        message(STATUS "  [Unix] 尝试从源码编译 OpenBLAS...")
+
+        option(BUILD_OPENBLAS_FROM_SOURCE "从源码编译 OpenBLAS" ON)
+
+        if(BUILD_OPENBLAS_FROM_SOURCE)
+            # 使用 CMake 构建 OpenBLAS
+            set(OPENBLAS_CMAKE_ARGS
+                -DCMAKE_INSTALL_PREFIX=${OPENBLAS_BUILD_DIR}
+                -DCMAKE_BUILD_TYPE=Release
+                -DBUILD_WITHOUT_LAPACK=OFF
+                -DBUILD_WITHOUT_LAPACKE=OFF
+                -DBUILD_STATIC_LIBS=ON
+                -DBUILD_SHARED_LIBS=OFF
+                -DNO_WARMUP=ON
+                -DUSE_LOCKING=OFF
+                -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+                -DCMAKE_Fortran_COMPILER=${CMAKE_Fortran_COMPILER}
+            )
+
+            if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
+                list(APPEND OPENBLAS_CMAKE_ARGS
+                    -DDYNAMIC_ARCH=ON
+                    -DTARGET=CORE2
+                )
+            elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+                list(APPEND OPENBLAS_CMAKE_ARGS
+                    -DDYNAMIC_ARCH=OFF
+                    -DTARGET=ARMV8
+                )
+            endif()
+
+            # 添加子目录编译
+            add_subdirectory(${OPENBLAS_ROOT} ${OPENBLAS_BUILD_DIR} EXCLUDE_FROM_ALL)
+
+            # OpenBLAS CMake 目标名称为 openblas（静态库）
+            if(TARGET openblas_static)
+                set_target_properties(openblas_static PROPERTIES GLOBAL TRUE)
+                set(OPENBLAS_TARGET openblas_static)
+            elseif(TARGET openblas)
+                set_target_properties(openblas PROPERTIES GLOBAL TRUE)
+                set(OPENBLAS_TARGET openblas)
+            endif()
+
+            set(OPENBLAS_AVAILABLE TRUE)
+            message(STATUS "  [Unix] OpenBLAS 从源码编译完成")
+        else()
+            # 查找系统安装的 OpenBLAS
+            find_package(BLAS QUIET)
+            if(BLAS_FOUND)
+                message(STATUS "  [Unix] 使用系统 BLAS: ${BLAS_LIBRARIES}")
+                set(OPENBLAS_AVAILABLE TRUE)
+            else()
+                message(WARNING "  [Unix] 未找到系统 BLAS/OpenBLAS")
+                set(OPENBLAS_AVAILABLE FALSE)
+            endif()
+        endif()
+
+    else()
+        # 其他平台：尝试查找预编译库
+        set(OPENBLAS_PREBUILT_LIB "${OPENBLAS_ROOT}/lib/libopenblas.a")
+        if(EXISTS ${OPENBLAS_PREBUILT_LIB})
+            add_library(openblas STATIC IMPORTED GLOBAL)
+            set_target_properties(openblas PROPERTIES
+                IMPORTED_LOCATION "${OPENBLAS_PREBUILT_LIB}"
+                INTERFACE_INCLUDE_DIRECTORIES "${OPENBLAS_ROOT}/include"
+            )
+            set(OPENBLAS_AVAILABLE TRUE)
+            message(STATUS "  [Other] 使用预编译 OpenBLAS 库")
+        else()
+            set(OPENBLAS_AVAILABLE FALSE)
+            message(STATUS "  OpenBLAS 在此平台不可用")
+        endif()
+    endif()
+
+    # 全局状态变量供其他组件使用
+    if(OPENBLAS_AVAILABLE)
+        set(OPENBLAS_ROOT_DIR ${OPENBLAS_BUILD_DIR} CACHE PATH "OpenBLAS installation root" FORCE)
+        message(STATUS "  ✓ OpenBLAS 可用")
+    else()
+        message(STATUS "  ✗ OpenBLAS 不可用")
+    endif()
+
+else()
+    set(OPENBLAS_AVAILABLE FALSE)
+    message(STATUS "OpenBLAS support disabled (use -DUSE_OPENBLAS=ON to enable)")
+endif()
+
+# ============================================================
 # MUMPS 配置（可选，需预编译 MUMPS + OpenBLAS）
 # 跨平台支持：
 # - Windows: 使用 build_windows.ps1 预编译的静态库 (.lib)
-# - Linux:   使用系统包管理器或手动编译的静态/共享库 (.a/.so)
-# - macOS:   使用Homebrew或手动编译的动态库 (.dylib)
+# - Linux:   从源码编译或使用系统包管理器
+# - macOS:   从源码编译（依赖 OpenBLAS）
 # ============================================================
 option(USE_MUMPS "启用 MUMPS 并行直接求解器后端" OFF)
+option(BUILD_MUMPS_FROM_SOURCE "从源码编译 MUMPS (需要 OpenBLAS)" ON)
 
 if(USE_MUMPS)
     message(STATUS "==========================================")
     message(STATUS "  MUMPS 5.8.2 配置 (跨平台)")
     message(STATUS "==========================================")
 
-    # 设置MUMPS根目录（各平台可能不同）
+    # 设置MUMPS根目录
     set(MUMPS_ROOT "${CMAKE_SOURCE_DIR}/lib/MUMPS")
 
     if(IS_WINDOWS)
@@ -503,130 +706,227 @@ if(USE_MUMPS)
         endif()
 
     elseif(IS_LINUX OR IS_MACOS)
-        # Unix平台：尝试查找系统安装或用户编译的MUMPS
-        # 原因说明：
-        # - Linux发行版可能提供mumps包（如apt install libmumps-dev）
-        # - macOS可通过Homebrew安装：brew install mumps（如果可用）
-        # - 也支持用户自行编译后指定路径
+        # Unix平台：支持从源码编译或使用系统库
+        # 策略优先级：
+        # 1. 从源码编译 MUMPS (BUILD_MUMPS_FROM_SOURCE=ON, 推荐)
+        # 2. 查找系统安装的 MUMPS 库
 
-        # 策略1：查找系统标准路径下的MUMPS库文件
-        find_library(MUMPS_SYSTEM_LIB
-            NAMES mumps mumps_common
-            PATHS
-                /usr/local/lib
-                /usr/lib
-                /opt/homebrew/lib  # macOS Apple Silicon
-                ${MUMPS_ROOT}/lib
-            NO_DEFAULT_PATH
-        )
+        if(BUILD_MUMPS_FROM_SOURCE AND OPENBLAS_AVAILABLE)
+            # ============================================================
+            # 从源码编译 MUMPS（推荐方式）
+            # 需要依赖：OpenBLAS (已通过 USE_OPENBLAS=ON 编译)
+            #          gfortran (Fortran 编译器)
+            # ============================================================
+            message(STATUS "  [Unix] 从源码编译 MUMPS...")
 
-        find_library(PORD_SYSTEM_LIB
-            NAMES pord
-            PATHS
-                /usr/local/lib
-                /usr/lib
-                /opt/homebrew/lib
-                ${MUMPS_ROOT}/lib
-            NO_DEFAULT_PATH
-        )
+            # 检查 Fortran 编译器
+            find_program(GFORTRAN_EXECUTABLE gfortran)
+            if(NOT GFORTRAN_EXECUTABLE)
+                message(FATAL_ERROR "MUMPS 需要 Fortran 编译器 (gfortran)。请安装: brew install gcc")
+            endif()
+            message(STATUS "    [Unix] Fortran 编译器: ${GFORTRAN_EXECUTABLE}")
 
-        find_library(MPISEQ_SYSTEM_LIB
-            NAMES mpiseq
-            PATHS
-                /usr/local/lib
-                /usr/lib
-                /opt/homebrew/lib
-                ${MUMPS_ROOT}/lib
-            NO_DEFAULT_PATH
-        )
+            # 设置 OpenBLAS 路径供 MUMPS 使用
+            set(MUMPS_OPENBLAS_DIR "${OPENBLAS_ROOT_DIR}")
+            if(NOT MUMPS_OPENBLAS_DIR OR NOT EXISTS "${MUMPS_OPENBLAS_DIR}/lib/libopenblas.a")
+                # 回退到预编译位置
+                set(MUMPS_OPENBLAS_DIR "${CMAKE_BINARY_DIR}/openblas_build")
+                if(NOT EXISTS "${MUMPS_OPENBLAS_DIR}/lib/libopenblas.a")
+                    message(FATAL_ERROR "MUMPS 需要 OpenBLAS，但未找到编译好的库文件")
+                endif()
+            endif()
 
-        # 查找OpenBLAS或其他BLAS实现
-        find_library(OPENBLAS_SYSTEM_LIB
-            NAMES openblas blas cblas
-            PATHS
-                /usr/local/lib
-                /usr/lib
-                /opt/homebrew/lib
-                /opt/homebrew/opt/openblas/lib  # macOS Homebrew
-                ${CMAKE_SOURCE_DIR}/lib/OpenBLAS/lib
-            NO_DEFAULT_PATH
-        )
+            message(STATUS "    [Unix] 使用 OpenBLAS: ${MUMPS_OPENBLAS_DIR}")
 
-        # 检查是否所有必需库都找到了
-        set(UNIX_MUMPS_FOUND TRUE)
+            # 配置 MUMPS CMake 参数
+            set(MUMPS_CMAKE_ARGS
+                -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/mumps_build
+                -DCMAKE_BUILD_TYPE=Release
+                -DMUMPS_USE_SEQMPI=ON
+                -DMUMPS_BUILD_PORD=ON
+                -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+                -DCMAKE_Fortran_COMPILER=${GFORTRAN_EXECUTABLE}
+                -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+                -DOpenBLAS_ROOT=${MUMPS_OPENBLAS_DIR}
+            )
 
-        if(MUMPS_SYSTEM_LIB AND PORD_SYSTEM_LIB AND MPISEQ_SYSTEM_LIB AND OPENBLAS_SYSTEM_LIB)
-            message(STATUS "  [Unix] 找到MUMPS库:")
-            message(STATUS "    MUMPS:  ${MUMPS_SYSTEM_LIB}")
-            message(STATUS "    PORD:   ${PORD_SYSTEM_LIB}")
-            message(STATUS "    MPISEQ: ${MPISEQ_SYSTEM_LIB}")
-            message(STATUS "    BLAS:   ${OPENBLAS_SYSTEM_LIB}")
+            # 添加子目录编译 MUMPS
+            set(MUMPS_BUILD_DIR "${CMAKE_BINARY_DIR}/mumps_src_build")
 
-            # 创建导入目标
-            add_library(mumps SHARED IMPORTED)
-            set_target_properties(mumps PROPERTIES
-                IMPORTED_LOCATION "${MUMPS_SYSTEM_LIB}"
+            # 获取 CPU 核心数用于并行编译
+            execute_process(
+                COMMAND sysctl -n hw.ncpu
+                OUTPUT_VARIABLE MUMPS_NUM_CORES
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+            )
+
+            # 创建自定义目标来跟踪 MUMPS 构建
+            add_custom_target(mumps_build ALL
+                COMMAND ${CMAKE_COMMAND} ${MUMPS_CMAKE_ARGS} -S ${MUMPS_ROOT} -B ${MUMPS_BUILD_DIR}
+                COMMAND ${CMAKE_COMMAND} --build ${MUMPS_BUILD_DIR} --config Release -j${MUMPS_NUM_CORES}
+                COMMENT "Building MUMPS from source..."
+                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                BYPRODUCTS
+                    ${MUMPS_BUILD_DIR}/lib/libdmumps.a
+                    ${MUMPS_BUILD_DIR}/lib/libzmups.a
+                    ${MUMPS_BUILD_DIR}/lib/libpord.a
+                    ${MUMPS_BUILD_DIR}/lib/libmpiseq.a
+            )
+
+            # 导入 MUMPS 目标
+            add_library(dmumps STATIC IMPORTED GLOBAL)
+            set_target_properties(dmumps PROPERTIES
+                IMPORTED_LOCATION "${MUMPS_BUILD_DIR}/lib/libdmumps.a"
                 INTERFACE_INCLUDE_DIRECTORIES "${MUMPS_ROOT}/include;${MUMPS_ROOT}/libseq"
             )
+            add_dependencies(dmumps mumps_build)
 
-            add_library(pord SHARED IMPORTED)
-            set_target_properties(pord PROPERTIES
-                IMPORTED_LOCATION "${PORD_SYSTEM_LIB}"
+            add_library(zmups STATIC IMPORTED GLOBAL)
+            set_target_properties(zmups PROPERTIES
+                IMPORTED_LOCATION "${MUMPS_BUILD_DIR}/lib/libzmups.a"
+                INTERFACE_INCLUDE_DIRECTORIES "${MUMPS_ROOT}/include;${MUMPS_ROOT}/libseq"
+            )
+            add_dependencies(zmups mumps_build)
+
+            add_library(pord_mumps STATIC IMPORTED GLOBAL)
+            set_target_properties(pord_mumps PROPERTIES
+                IMPORTED_LOCATION "${MUMPS_BUILD_DIR}/lib/libpord.a"
                 INTERFACE_INCLUDE_DIRECTORIES "${MUMPS_ROOT}/PORD/include"
             )
+            add_dependencies(pord_mumps mumps_build)
 
-            add_library(mpiseq SHARED IMPORTED)
+            add_library(mpiseq STATIC IMPORTED GLOBAL)
             set_target_properties(mpiseq PROPERTIES
-                IMPORTED_LOCATION "${MPISEQ_SYSTEM_LIB}"
+                IMPORTED_LOCATION "${MUMPS_BUILD_DIR}/lib/libmpiseq.a"
                 INTERFACE_INCLUDE_DIRECTORIES "${MUMPS_ROOT}/libseq"
             )
+            add_dependencies(mpiseq mumps_build)
 
-            add_library(openblas SHARED IMPORTED)
-            set_target_properties(openblas PROPERTIES
-                IMPORTED_LOCATION "${OPENBLAS_SYSTEM_LIB}"
-            )
-
-            # Unix下查找OpenBLAS头文件
-            find_path(OPENBLAS_INCLUDE_DIR
-                NAMES cblas.h
-                PATHS
-                    /usr/local/include
-                    /usr/include
-                    /opt/homebrew/include
-                    ${CMAKE_SOURCE_DIR}/lib/OpenBLAS/include
-            )
-            if(OPENBLAS_INCLUDE_DIR)
-                set_target_properties(openblas PROPERTIES
-                    INTERFACE_INCLUDE_DIRECTORIES "${OPENBLAS_INCLUDE_DIR}"
-                )
-            endif()
+            # 创建 mumps_components 别名（包含所有 MUMPS 组件库）
+            add_library(mumps_components INTERFACE IMPORTED GLOBAL)
+            target_link_libraries(mumps_components INTERFACE dmumps zmups pord_mumps mpiseq openblas)
 
             set(MUMPS_AVAILABLE TRUE)
             include_directories(${MUMPS_ROOT}/include)
             include_directories(${MUMPS_ROOT}/libseq)
-            message(STATUS "  [Unix] MUMPS配置完成 (系统共享库)")
-
-            # macOS特殊处理：设置RPATH以便找到dylib
-            if(IS_MACOS)
-                set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
-                message(STATUS "  [macOS] 已启用RPATH自动设置（用于定位.dylib）")
-            endif()
+            message(STATUS "  [Unix] MUMPS 从源码编译完成 (静态库)")
+            message(STATUS "    [Unix] MUMPS 库: ${MUMPS_BUILD_DIR}/lib/libdmumps.a")
 
         else()
-            # 未找到系统库时的提示信息
-            set(UNIX_MUMPS_FOUND FALSE)
-            if(IS_LINUX)
-                message(WARNING "  [Linux] 未找到完整的MUMPS库。请执行以下操作之一：")
-                message(WARNING "    1. Ubuntu/Debian: sudo apt-get install libmumps-dev libopenblas-dev")
-                message(WARNING "    2. CentOS/RHEL: sudo yum install mumps-openblas-devel")
-                message(WARNING "    3. 从源码编译MUMPS并设置MUMPS_ROOT环境变量")
-            elseif(IS_MACOS)
-                message(WARNING "  [macOS] 未找到完整的MUMPS库。请执行以下操作之一：")
-                message(WARNING "    1. Homebrew: brew install openblas (然后手动编译MUMPS)")
-                message(WARNING "    2. 从源码编译MUMPS并设置MUMPS_ROOT环境变量")
+            # ============================================================
+            # 查找系统安装的 MUMPS（回退方案）
+            # ============================================================
+            message(STATUS "  [Unix] 尝试查找系统 MUMPS 库...")
+
+            find_library(MUMPS_SYSTEM_LIB
+                NAMES mumps mumps_common dmumps
+                PATHS
+                    /usr/local/lib
+                    /usr/lib
+                    /opt/homebrew/lib
+                    ${MUMPS_ROOT}/lib
+                    ${CMAKE_BINARY_DIR}/lib
+                NO_DEFAULT_PATH
+            )
+
+            find_library(PORD_SYSTEM_LIB
+                NAMES pord
+                PATHS
+                    /usr/local/lib
+                    /usr/lib
+                    /opt/homebrew/lib
+                    ${MUMPS_ROOT}/lib
+                    ${CMAKE_BINARY_DIR}/lib
+                NO_DEFAULT_PATH
+            )
+
+            find_library(MPISEQ_SYSTEM_LIB
+                NAMES mpiseq
+                PATHS
+                    /usr/local/lib
+                    /usr/lib
+                    /opt/homebrew/lib
+                    ${MUMPS_ROOT}/lib
+                    ${CMAKE_BINARY_DIR}/lib
+                NO_DEFAULT_PATH
+            )
+
+            # 查找OpenBLAS或其他BLAS实现
+            if(OPENBLAS_AVAILABLE AND TARGET openblas)
+                set(OPENBLAS_SYSTEM_LIB openblas)
+                message(STATUS "    [优先] 使用从源码编译的 OpenBLAS (目标: openblas)")
+            else()
+                find_library(OPENBLAS_SYSTEM_LIB
+                    NAMES openblas blas cblas
+                    PATHS
+                        /usr/local/lib
+                        /usr/lib
+                        /opt/homebrew/lib
+                        /opt/homebrew/opt/openblas/lib
+                        ${CMAKE_SOURCE_DIR}/lib/OpenBLAS/lib
+                        ${CMAKE_BINARY_DIR}/openblas_build/lib
+                    NO_DEFAULT_PATH
+                )
             endif()
 
-            set(MUMPS_AVAILABLE FALSE)
+            # 检查是否所有必需库都找到了
+            if(MUMPS_SYSTEM_LIB AND PORD_SYSTEM_LIB AND MPISEQ_SYSTEM_LIB AND OPENBLAS_SYSTEM_LIB)
+                message(STATUS "  [Unix] 找到MUMPS库:")
+                message(STATUS "    MUMPS:  ${MUMPS_SYSTEM_LIB}")
+                message(STATUS "    PORD:   ${PORD_SYSTEM_LIB}")
+                message(STATUS "    MPISEQ: ${MPISEQ_SYSTEM_LIB}")
+                message(STATUS "    BLAS:   ${OPENBLAS_SYSTEM_LIB}")
+
+                # 创建导入目标
+                add_library(mumps SHARED IMPORTED)
+                set_target_properties(mumps PROPERTIES
+                    IMPORTED_LOCATION "${MUMPS_SYSTEM_LIB}"
+                    INTERFACE_INCLUDE_DIRECTORIES "${MUMPS_ROOT}/include;${MUMPS_ROOT}/libseq"
+                )
+
+                add_library(pord SHARED IMPORTED)
+                set_target_properties(pord PROPERTIES
+                    IMPORTED_LOCATION "${PORD_SYSTEM_LIB}"
+                    INTERFACE_INCLUDE_DIRECTORIES "${MUMPS_ROOT}/PORD/include"
+                )
+
+                add_library(mpiseq SHARED IMPORTED)
+                set_target_properties(mpiseq PROPERTIES
+                    IMPORTED_LOCATION "${MPISEQ_SYSTEM_LIB}"
+                    INTERFACE_INCLUDE_DIRECTORIES "${MUMPS_ROOT}/libseq"
+                )
+
+                if(NOT TARGET openblas)
+                    add_library(openblas SHARED IMPORTED)
+                    set_target_properties(openblas PROPERTIES
+                        IMPORTED_LOCATION "${OPENBLAS_SYSTEM_LIB}"
+                    )
+                endif()
+
+                set(MUMPS_AVAILABLE TRUE)
+                include_directories(${MUMPS_ROOT}/include)
+                include_directories(${MUMPS_ROOT}/libseq)
+                message(STATUS "  [Unix] MUMPS配置完成 (系统共享库)")
+
+                if(IS_MACOS)
+                    set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+                    message(STATUS "  [macOS] 已启用RPATH自动设置")
+                endif()
+
+            else()
+                # 未找到系统库时的提示信息
+                set(MUMPS_AVAILABLE FALSE)
+                if(IS_LINUX)
+                    message(WARNING "  [Linux] 未找到完整的MUMPS库。请执行以下操作之一：")
+                    message(WARNING "    1. 启用源码编译: cmake .. -DUSE_MUMPS=ON -DUSE_OPENBLAS=ON")
+                    message(WARNING "    2. Ubuntu/Debian: sudo apt-get install libmumps-dev libopenblas-dev")
+                    message(WARNING "    3. CentOS/RHEL: sudo yum install mumps-openblas-devel")
+                elseif(IS_MACOS)
+                    message(WARNING "  [macOS] 未找到完整的MUMPS库。请执行以下操作：")
+                    message(WARNING "    1. 启用源码编译: cmake .. -DUSE_MUMPS=ON -DUSE_OPENBLAS=ON -DBUILD_MUMPS_FROM_SOURCE=ON")
+                    message(WARNING "    2. 确保 gfortran 已安装: brew install gcc")
+                endif()
+            endif()
         endif()
 
     else()

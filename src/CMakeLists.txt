@@ -150,7 +150,7 @@ if(MUMPS_AVAILABLE)
 
     target_link_libraries(mumps_lib
         PUBLIC
-            mumps pord mpiseq openblas
+            dmumps zmumps pord_mumps mpiseq openblas
         PRIVATE
             include_lib
             spdlog_lib

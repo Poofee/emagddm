@@ -308,6 +308,18 @@ int MumpsContext::factorize_from_csr(const CsrMatrix<double>& csr, int sym) {
     return factorize(n, nz, irn_storage_.data(), jcn_storage_.data(), a_storage_.data());
 }
 
+bool MumpsContext::is_factored() const {
+    return state_ == State::FACTORIZED;
+}
+
+bool MumpsContext::is_initialized() const {
+    return state_ != State::UNINITIALIZED;
+}
+
+int MumpsContext::matrix_size() const {
+    return n_;
+}
+
 } // namespace numeric
 
 /**

@@ -581,6 +581,12 @@ if(MUMPS_AVAILABLE)
             mumps_lib
     )
 
+    if(WIN32)
+        target_link_libraries(test_mumps_context PRIVATE ifport)
+    else()
+        target_link_libraries(test_mumps_context PRIVATE gfortran)
+    endif()
+
     target_compile_definitions(test_mumps_context PRIVATE HAVE_MUMPS)
     add_test(NAME test_mumps_context COMMAND test_mumps_context)
 
@@ -611,6 +617,12 @@ if(MUMPS_AVAILABLE)
             GTest::gtest_main
             mumps_lib
     )
+
+    if(WIN32)
+        target_link_libraries(test_complex_mumps_context PRIVATE ifport)
+    else()
+        target_link_libraries(test_complex_mumps_context PRIVATE gfortran)
+    endif()
 
     target_compile_definitions(test_complex_mumps_context PRIVATE HAVE_MUMPS)
     add_test(NAME test_complex_mumps_context COMMAND test_complex_mumps_context)
