@@ -238,6 +238,7 @@ target_include_directories(app_lib
     PRIVATE
         ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_SOURCE_DIR}/include/app
+        ${CMAKE_SOURCE_DIR}/include/solver
         ${CMAKE_SOURCE_DIR}/include/numeric      # 新增：支持 shape_function_base.hpp
         ${CMAKE_SOURCE_DIR}/lib/eigen            # 新增：Eigen 库依赖
         ${CMAKE_SOURCE_DIR}/lib/spdlog/include
@@ -251,6 +252,7 @@ target_link_libraries(app_lib
         fetidp_lib
         numeric_lib
         tool_lib
+        solver_lib
 )
 
 if(MUMPS_AVAILABLE AND TARGET mumps_lib)
@@ -262,3 +264,35 @@ if(USE_MPI)
 endif()
 
 message(STATUS "  app_lib    : ${app_lib_SOURCES}")
+
+# ============================================================
+# 求解器层模块
+# ============================================================
+collect_sources(solver_lib_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/solver")
+add_library(solver_lib ${solver_lib_SOURCES})
+
+target_include_directories(solver_lib
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/solver
+        ${CMAKE_SOURCE_DIR}/include/fe_em
+        ${CMAKE_SOURCE_DIR}/include/numeric
+        ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/lib/eigen
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+        ${CMAKE_SOURCE_DIR}/lib/nlohmann
+)
+
+target_link_libraries(solver_lib
+    PRIVATE
+        numeric_lib
+        fe_em_lib
+        tool_lib
+        spdlog_lib
+)
+
+if(USE_MPI)
+    target_link_libraries(solver_lib PRIVATE ${MPI_CXX_LIBRARIES})
+endif()
+
+message(STATUS "  solver_lib : ${solver_lib_SOURCES}")

@@ -9,9 +9,9 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/numeric
     ${CMAKE_CURRENT_SOURCE_DIR}/tool
     ${CMAKE_CURRENT_SOURCE_DIR}/app
+    ${CMAKE_CURRENT_SOURCE_DIR}/solver
 )
 
-# 创建头文件库（空库，仅用于依赖管理）
 add_library(include_lib INTERFACE)
 
 target_include_directories(include_lib INTERFACE
@@ -21,4 +21,5 @@ target_include_directories(include_lib INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/numeric
     ${CMAKE_CURRENT_SOURCE_DIR}/tool
     ${CMAKE_CURRENT_SOURCE_DIR}/app
+    ${CMAKE_CURRENT_SOURCE_DIR}/solver
 )

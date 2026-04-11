@@ -36,4 +36,8 @@ output/
 
 # 系统文件
 .DS_Store
-Thumbs.db
+lib/OpenBLAS/libopenblas_armv8-r0.3.32.a
+lib/OpenBLAS/libopenblas.0.dylib
+lib/OpenBLAS/libopenblas_armv8-r0.3.32.dylib
+lib/OpenBLAS/libopenblas.a
+lib/OpenBLAS/libopenblas.dylib
