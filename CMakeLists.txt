@@ -314,7 +314,7 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/lib/nlohmann
 )
 
-# spdlog库配置（需要编译部分源文件）
+# spdlog库配置（需要编译部分源文件，含bundled fmt库）
 add_library(spdlog_lib
     ${CMAKE_SOURCE_DIR}/lib/spdlog/src/spdlog.cpp
     ${CMAKE_SOURCE_DIR}/lib/spdlog/src/cfg.cpp
@@ -322,6 +322,7 @@ add_library(spdlog_lib
     ${CMAKE_SOURCE_DIR}/lib/spdlog/src/file_sinks.cpp
     ${CMAKE_SOURCE_DIR}/lib/spdlog/src/stdout_sinks.cpp
     ${CMAKE_SOURCE_DIR}/lib/spdlog/src/async.cpp
+    ${CMAKE_SOURCE_DIR}/lib/spdlog/src/bundled_fmtlib_format.cpp
 )
 
 target_compile_definitions(spdlog_lib PRIVATE SPDLOG_COMPILED_LIB)

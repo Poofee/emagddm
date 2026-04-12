@@ -22,6 +22,7 @@ enum class FieldType {
 
 enum class SimulationType { 
     ELECTROSTATIC,  ///< 静电场
+    DC_CONDUCTION,   ///< 直流电流场
     MAGNETOSTATIC,  ///< 静磁场
     EDDYCURRENT,    ///< 涡流场
     TRANSIENT,      ///< 瞬态场

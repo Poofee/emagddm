@@ -42,31 +42,43 @@ using namespace solver;
 // ============================================================
 
 /**
- * @brief 构建2D平行板电容器的简单网格（2个TRI3单元）
+ * @brief 构建2D平行板电容器的简单网格（4个TRI3单元，6个节点）
  * @param plate_distance 板间距 (m)
  * @param plate_width 板宽 (m)
  * @return EMMeshData 网格数据
+ * @details 网格拓扑：6节点4单元TRI3矩形网格（2×2细分）
+ *          节点布局:
+ *            节点0(0,0)  节点1(w/2,0)  节点2(w,0)
+ *            节点3(0,d)  节点4(w/2,d)  节点5(w,d)
+ *          下板(节点0,1): 接地 V=0（Dirichlet）
+ *          上板(节点4,5): 高电位 V=V0（Dirichlet）
+ *          中间节点(2,3): 自由DOF（由求解器计算）
  */
 EMMeshData buildParallelPlateMesh(double plate_distance = 0.01, double plate_width = 0.01) {
     EMMeshData mesh;
 
-    // 4个节点：左下(0,0)、右下(w,0)、右上(w,d)、左上(0,d)
-    // 上板：节点3(0,d)和2(w,d) — 高电位
-    // 下板：节点0(0,0)和1(w,0) — 接地
     double d = plate_distance;
     double w = plate_width;
+    double half_w = w / 2.0;
 
+    // 6个节点：2行×3列网格（0-based编号）
+    // 下排: 左下(0,0)、中下(w/2,0)、右下(w,0)
+    // 上排: 左上(0,d)、中上(w/2,d)、右上(w,d)
     mesh.nodes = {
-        {1, 0.0,   0.0, 0.0, 1},   // 节点1: 左下（接地）
-        {2, w,     0.0, 0.0, 1},   // 节点2: 右下（接地）
-        {3, w,     d,   0.0, 2},   // 节点3: 右上（高电位）
-        {4, 0.0,   d,   0.0, 2}    // 节点4: 左上（高电位）
+        {0, 0.0,     0.0, 0.0, 1},   // 节点0: 左下（接地端）
+        {1, half_w,  0.0, 0.0, 1},   // 节点1: 中下（接地端）
+        {2, w,      0.0, 0.0, 1},   // 节点2: 右下（接地端）
+        {3, 0.0,     d,   0.0, 1},   // 节点3: 左上（自由）
+        {4, half_w,  d,   0.0, 1},   // 节点4: 中上（高电位端）
+        {5, w,      d,   0.0, 1}    // 节点5: 右上（高电位端）
     };
 
-    // 2个TRI3单元，组成一个矩形
+    // 4个TRI3单元
     mesh.elements = {
-        {1, {1, 2, 3}, ElemType::TRI3, DOFType::SCALAR_ONLY, 1, 1},
-        {2, {1, 3, 4}, ElemType::TRI3, DOFType::SCALAR_ONLY, 1, 1}
+        {0, {0, 1, 4}, ElemType::TRI3, DOFType::SCALAR_ONLY, 1, 1},  // 左下三角
+        {1, {0, 4, 3}, ElemType::TRI3, DOFType::SCALAR_ONLY, 1, 1},  // 左上三角
+        {2, {1, 2, 5}, ElemType::TRI3, DOFType::SCALAR_ONLY, 1, 1},  // 右下三角
+        {3, {1, 5, 4}, ElemType::TRI3, DOFType::SCALAR_ONLY, 1, 1}   // 右上三角
     };
 
     return mesh;
@@ -92,20 +104,20 @@ std::map<int, MaterialProperties> buildDielectricMaterialMap(double epsilon_r = 
 std::vector<Boundary> buildPlateBoundaries(double V_high = 100.0) {
     std::vector<Boundary> boundaries;
 
-    // 接地板边界条件（φ=0V）
+    // 接地板边界条件（φ=0V）— 下侧节点0和1
     Boundary ground_bc("Ground_Plate");
     ground_bc.setType(BndType::DIRICHLET);
     ground_bc.setVoltage(0.0);
+    ground_bc.addObject("node_0");
     ground_bc.addObject("node_1");
-    ground_bc.addObject("node_2");
     boundaries.push_back(std::move(ground_bc));
 
-    // 高压板边界条件（φ=V_high V）
+    // 高压板边界条件（φ=V_high V）— 上侧节点4和5
     Boundary hv_bc("HighVoltage_Plate");
     hv_bc.setType(BndType::DIRICHLET);
     hv_bc.setVoltage(V_high);
-    hv_bc.addObject("node_3");
     hv_bc.addObject("node_4");
+    hv_bc.addObject("node_5");
     boundaries.push_back(std::move(hv_bc));
 
     return boundaries;
@@ -118,22 +130,22 @@ std::vector<Boundary> buildPlateBoundaries(double V_high = 100.0) {
 std::vector<EMBoundaryMarker> buildPlateBoundaryMarkers(double V_high = 100.0) {
     std::vector<EMBoundaryMarker> markers;
 
-    // 接地板标记
+    // 接地板标记 — 下侧节点0和1
     EMBoundaryMarker ground_marker;
     ground_marker.id = 1;
     ground_marker.bnd_type = BndType::DIRICHLET;
     ground_marker.dof_type = DOFType::SCALAR_ONLY;
-    ground_marker.target_ids = std::vector<int>{1, 2};  // 节点1和2接地
+    ground_marker.target_ids = std::vector<int>{0, 1};  // 下侧接地
     ground_marker.value = 0.0;
     ground_marker.name = "Ground_Plate";
     markers.push_back(ground_marker);
 
-    // 高压板标记
+    // 高压板标记 — 上侧节点4和5
     EMBoundaryMarker hv_marker;
     hv_marker.id = 2;
     hv_marker.bnd_type = BndType::DIRICHLET;
     hv_marker.dof_type = DOFType::SCALAR_ONLY;
-    hv_marker.target_ids = std::vector<int>{3, 4};  // 节点3和4高电位
+    hv_marker.target_ids = std::vector<int>{4, 5};  // 上侧高电位
     hv_marker.value = V_high;
     hv_marker.name = "HighVoltage_Plate";
     markers.push_back(hv_marker);
@@ -372,7 +384,7 @@ TEST(SchedulerTest, CreateElectrostaticField) {
 // 测试9: 维度类型与求解器名称一致性
 // ============================================================
 
-TEST(ElectrostaticSolverTest, DimensionTypes) {
+TEST_F(ElectrostaticSolverTest, DimensionTypes) {
     // 2D求解器
     ElectrostaticSolver solver_2d(DimType::D2);
     EXPECT_EQ(solver_2d.getDimType(), DimType::D2);
@@ -418,5 +430,9 @@ TEST(MaterialMappingTest, BuildMaterialProperties) {
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
+
+    // 初始化日志系统（输出到控制台）
+    tool::LoggerFactory::initializeDefaultLogger();
+
     return RUN_ALL_TESTS();
 }

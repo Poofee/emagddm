@@ -11,6 +11,7 @@
 
 #include "solver_scheduler.hpp"
 #include "electrostatic_solver.hpp"
+#include "dc_conduction_solver.hpp"
 #include "project_manager.hpp"
 #include "logger_factory.hpp"
 #include "math_constants.hpp"
@@ -206,6 +207,10 @@ std::unique_ptr<PhysicsField> SolverScheduler::createPhysicsField(
         case tool::SimulationType::ELECTROSTATIC:
             FEEM_INFO("创建静电场求解器 (ElectrostaticSolver)");
             return std::make_unique<ElectrostaticSolver>(dim_type);
+
+        case tool::SimulationType::DC_CONDUCTION:
+            FEEM_INFO("创建直流电流场求解器 (DCConductionSolver)");
+            return std::make_unique<DCConductionSolver>(dim_type);
 
         case tool::SimulationType::MAGNETOSTATIC:
             FEEM_ERROR("静磁场求解器 (MagnetostaticSolver) 尚未实现");

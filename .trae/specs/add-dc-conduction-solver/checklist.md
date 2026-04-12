@@ -1,0 +1,27 @@
+- [x] SimulationType 枚举已添加 DC_CONDUCTION 值（位于 ELECTROSTATIC 之后）
+- [x] SolverScheduler::createPhysicsField() 已支持 DC_CONDITION 分支，可创建 DCConductionSolver 实例
+- [x] DCConductionIntegrator 类定义完整，继承 EMElementIntegratorBase
+- [x] DCConductionIntegrator::computeStiffnessMatrix() 实现 K_e = ∫∇N^T·σ·∇NdΩ（使用 σ 作为材料系数）
+- [x] DCConductionIntegrator 支持与 ElectrostaticIntegrator 相同的单元类型列表
+- [x] FieldData 新增 computeCurrentDensity() 接口并实现 J = σE 计算
+- [x] FieldData 新增 getElementCurrentDensity() 接口
+- [x] FieldData 新增 computeJouleHeating() 接口并实现 P = φ^T K φ
+- [x] FieldData 新增 computeTotalCurrent() 接口并实现 I = ∫J·ndS 积分
+- [x] FieldData 新增 computeVoltageDrop() 接口
+- [x] ResistanceCalculator 类定义完整，包含 computeResistance() 和 computeTotalCurrent()
+- [x] ResistanceCalculator::computeResistance() 实现欧姆定律法（施加单位电压→求解→积分端面电流→R=V/I）
+- [x] JouleHeatingCalculator 类定义完整，包含 computeTotalPower() 和 computeElementPowerDensity()
+- [x] JouleHeatingCalculator::computeTotalPower() 实现 P_total = φ^T K φ
+- [x] JouleHeatingCalculator::computeElementPowerDensity() 实现 p = σ|E|²
+- [x] DCConductionSolver 继承 PhysicsField，实现全部纯虚接口
+- [x] DCConductionSolver::setup() 完整实现（前检查σ>0 → 材料映射(σ为主参数) → DOF分配 → DCConductionIntegrator装配 → BC/激励施加）
+- [x] DCConductionSolver::solve() 实现 SPD 矩阵求解 + 解向量回扩
+- [x] DCConductionSolver::postProcess() 实现 E/J/P 计算并存入 FieldData
+- [x] DCConductionSolver::preCheck() 实现电导率合法性校验（导体区域 σ > 0）
+- [x] DCConductionSolver 支持 2D/3D/轴对称三种维度类型
+- [x] 均匀电阻条测试通过：电位线性分布、电流均匀、电阻 R=L/(σA) 误差 < 5%
+- [x] 焦耳热验证测试通过：P = V²/R = I²R 一致性验证
+- [x] 边界条件施加测试通过：Dirichlet电压边界 / Neumann电流边界正确施加
+- [x] 错误处理测试通过：零电导率材料检测报警、缺少边界条件检测
+- [x] 所有新增代码遵循项目规范：日志宏、无路径头文件、无硬编码、无全局变量、必须注释、无内存泄漏
+- [x] CMakeLists.txt 正确更新，新增源文件和测试目标可编译通过（solver_lib零错误编译通过；测试源码编译通过，链接错误为项目预存fmt库问题）

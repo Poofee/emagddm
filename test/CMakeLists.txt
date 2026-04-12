@@ -726,10 +726,37 @@ target_link_libraries(test_electrostatic_solver
         tool_lib
         spdlog_lib
         GTest::gtest
-        GTest::gtest_main
 )
 
 add_test(NAME test_electrostatic_solver COMMAND test_electrostatic_solver)
+
+# ==================== 直流电流场求解器完整测试套件 ====================
+add_executable(test_dc_conduction_solver
+    test_dc_conduction_solver.cpp
+)
+
+target_include_directories(test_dc_conduction_solver
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/solver
+        ${CMAKE_SOURCE_DIR}/include/fe_em
+        ${CMAKE_SOURCE_DIR}/include/numeric
+        ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/lib/eigen
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+)
+
+target_link_libraries(test_dc_conduction_solver
+    PRIVATE
+        solver_lib
+        fe_em_lib
+        numeric_lib
+        tool_lib
+        spdlog_lib
+        GTest::gtest
+)
+
+add_test(NAME test_dc_conduction_solver COMMAND test_dc_conduction_solver)
 
 # 为所有链接了 fe_em_lib 或 numeric_lib 的测试目标添加 OpenMP 链接
 # （因为 Eigen 库在启用 OpenMP 时会使用 OpenMP 并行功能）
@@ -746,6 +773,7 @@ if(USE_OPENMP AND TARGET OpenMP::OpenMP_CXX)
         test_omp_basic
         test_eigen_solver_backends_crtp  # 新增：CRTP 重构测试
         test_electrostatic_solver         # 新增：静电场求解器测试
+        test_dc_conduction_solver          # 新增：直流电流场求解器测试
     )
         if(TARGET ${test_target})
             target_link_libraries(${test_target} PRIVATE OpenMP::OpenMP_CXX)
