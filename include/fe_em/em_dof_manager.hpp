@@ -25,10 +25,12 @@
 #include <vector>
 #include <unordered_map>
 #include <set>
+#include <memory>
 #include "em_mesh_data.hpp"
 #include "em_dof_data.hpp"
 #include "element_geometry.hpp"
 #include "global_edge_id_generator.hpp"
+#include "tree_gauge.hpp"
 #include "logger_factory.hpp"
 
 namespace fe_em {
@@ -135,6 +137,40 @@ public:
      */
     const std::vector<double>& getConstrainedDOFValues() const;
 
+    /**
+     * @brief 应用Tree Gauge规范（可选调用）
+     * @details 在build()之后调用，进一步压缩矢量棱边DOF：
+     *          - 树边DOF从系统中剔除（A=0）
+     *          - 仅保留余树边DOF参与求解
+     *          - 显著减少系统规模（通常减少30-50%）
+     *
+     * @note 调用后，getNumFreeDOFs()返回的是约化后的DOF数量
+     * @note getElemLocalToGlobal()中的树边DOF标记为-1
+     * @warning 此方法仅对VECTOR_EDGE_ONLY和MIXED_AV类型的矢量DOF有效
+     *
+     * @throws std::runtime_error 当未先调用build()时抛出异常
+     *
+     * @note 典型使用流程：
+     *       @code
+     *       dof_manager.build();
+     *       int original_dofs = dof_manager.getNumFreeDOFs();
+     *       dof_manager.applyTreeGauge();
+     *       int reduced_dofs = dof_manager.getNumFreeDOFs();
+     *       // reduced_dofs < original_dofs (压缩成功)
+     *       @endcode
+     */
+    void applyTreeGauge();
+
+    /**
+     * @brief 获取Tree Gauge对象（用于查询树边/余树边信息）
+     * @return const TreeGauge* Tree Gauge对象的常量指针（未调用applyTreeGauge时返回nullptr）
+     *
+     * @note 返回的指针生命周期与EMDOFManager实例相同
+     * @note 可用于查询树边/余树边分类、环量自由度等信息
+     * @note 也可用于解向量恢复（mapReducedSolutionToFull）
+     */
+    const TreeGauge* getTreeGauge() const;
+
 private:
     // ==================== 输入数据 ====================
     const EMMeshData& mesh_data_;                              ///< 网格数据常量引用
@@ -145,6 +181,11 @@ private:
     int num_free_dofs_ = 0;                                    ///< 自由DOF总数
     std::vector<Local2Global> elem_local_to_global_;           ///< 单元局部→全局映射表
     std::vector<double> constrained_dof_values_;               ///< 约束DOF值向量（预编号顺序）
+
+    // ==================== Tree Gauge集成数据 ====================
+    std::unique_ptr<TreeGauge> tree_gauge_;                    ///< Tree Gauge对象（延迟初始化）
+    int original_num_free_dofs_ = 0;                           ///< applyTreeGauge前的原始自由DOF数
+    std::unordered_map<int, int> free_to_reduced_;             ///< 原始自由编号→约化编号映射
 
     // ==================== 中间数据（四步间传递）====================
 
@@ -278,6 +319,18 @@ private:
      * @return Local2Global 该单元的局部-全局映射（前半段标量+后半段矢量）
      */
     Local2Global buildMixedAVElementMapping(const Element& elem) const;
+
+    /**
+     * @brief 使用Tree Gauge结果重新编号矢量DOF
+     * @details 在applyTreeGauge()中调用，根据Tree Gauge的分类结果重新编号：
+     *          - 树边DOF标记为-1（从系统中剔除）
+     *          - 余树边DOF分配新的约化编号
+     *          - 标量DOF保持不变
+     *
+     * @note 此方法会修改elem_local_to_global_和num_free_dofs_
+     * @note 标量DOF编号保持不变，仅对矢量棱边DOF进行重编号
+     */
+    void renumberVectorDOFsWithTreeGauge();
 };
 
 } // namespace fe_em

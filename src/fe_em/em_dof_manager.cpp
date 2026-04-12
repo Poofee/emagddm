@@ -443,4 +443,184 @@ Local2Global EMDOFManager::buildMixedAVElementMapping(const Element& elem) const
     return mapping;
 }
 
+// ==================== Tree Gauge集成方法 ====================
+
+void EMDOFManager::applyTreeGauge() {
+    // 前置检查1：必须先调用build()
+    if (elem_local_to_global_.empty()) {
+        throw std::runtime_error("必须先调用build()才能应用Tree Gauge");
+    }
+
+    // 前置检查2：防止重复调用（幂等性保护）
+    if (tree_gauge_) {
+        FEEM_WARN("Tree Gauge已应用，重复调用将被忽略");
+        return;
+    }
+
+    // 检查是否存在矢量单元（否则Tree Gauge无意义）
+    bool has_vector_elements = false;
+    for (const auto& elem : mesh_data_.elements) {
+        if (hasVectorDOF(elem.dof_type)) {
+            has_vector_elements = true;
+            break;
+        }
+    }
+
+    if (!has_vector_elements) {
+        FEEM_WARN("网格中无矢量单元，跳过Tree Gauge");
+        return;
+    }
+
+    FEEM_INFO("========== 开始应用Tree Gauge ==========");
+    FEEM_INFO("原始自由DOF数: {}", num_free_dofs_);
+
+    // 步骤1：保存原始自由DOF数
+    original_num_free_dofs_ = num_free_dofs_;
+
+    // 步骤2：创建TreeGauge对象并构建
+    tree_gauge_ = std::make_unique<TreeGauge>(
+        mesh_data_,
+        elem_local_to_global_edge_,
+        constraint_data_.constrained_edges
+    );
+    tree_gauge_->build();
+
+    // 步骤3：使用Tree Gauge结果重新编号矢量DOF
+    renumberVectorDOFsWithTreeGauge();
+
+    FEEM_INFO("========== Tree Gauge应用完成 ==========");
+    FEEM_INFO("约化后自由DOF数: {} (压缩率: {:.1f}%)",
+              num_free_dofs_,
+              100.0 * (original_num_free_dofs_ - num_free_dofs_) / original_num_free_dofs_);
+}
+
+const TreeGauge* EMDOFManager::getTreeGauge() const {
+    return tree_gauge_.get();
+}
+
+void EMDOFManager::renumberVectorDOFsWithTreeGauge() {
+    // 获取Tree Gauge的分类结果
+    const auto& cotree_edges = tree_gauge_->getCotreeEdges();
+    const auto& circulation_dofs = tree_gauge_->getCirculationDOFs();
+    const auto& cotree_to_reduced = tree_gauge_->getCotreeEdgeToReducedDOF();
+
+    // 统计标量自由DOF数量（保持不变）
+    int scalar_free_count = 0;
+
+    for (const auto& mapping : elem_local_to_global_) {
+        if (mapping.is_mixed()) {
+            // MIXED_AV单元：前半段是标量DOF [0, num_scalar_dofs)
+            for (int i = 0; i < mapping.num_scalar_dofs; ++i) {
+                if (mapping.indices[i] >= 0 && mapping.indices[i] >= scalar_free_count) {
+                    scalar_free_count = mapping.indices[i] + 1;
+                }
+            }
+        } else if (mapping.num_vector_dofs == 0) {
+            // SCALAR_ONLY单元：所有DOF都是标量DOF
+            for (int idx : mapping.indices) {
+                if (idx >= 0 && idx >= scalar_free_count) {
+                    scalar_free_count = idx + 1;
+                }
+            }
+        }
+        // VECTOR_EDGE_ONLY单元不需要统计标量DOF
+    }
+
+    FEEM_DEBUG("标量自由DOF数（保持不变）: {}", scalar_free_count);
+
+    // 第二次遍历：重新编号映射表中的矢量DOF
+    for (auto& mapping : elem_local_to_global_) {
+        if (mapping.is_mixed()) {
+            // MIXED_AV单元：后半段是矢量DOF [num_scalar_dofs, end)
+            int start_idx = mapping.num_scalar_dofs;
+
+            for (size_t i = static_cast<size_t>(start_idx); i < mapping.indices.size(); ++i) {
+                if (mapping.indices[i] >= 0) {
+                    size_t elem_idx = static_cast<size_t>(mapping.element_id);
+                    if (elem_idx >= elem_local_to_global_edge_.size()) {
+                        throw std::out_of_range(
+                            std::string("EMDOFManager::renumberVectorDOFsWithTreeGauge(): ") +
+                            "单元" + std::to_string(mapping.element_id) +
+                            " 的element_id=" + std::to_string(elem_idx) +
+                            " 超出elem_local_to_global_edge_范围(大小=" +
+                            std::to_string(elem_local_to_global_edge_.size()) + ")"
+                        );
+                    }
+
+                    int local_edge_idx = static_cast<int>(i - start_idx);
+                    const auto& local_to_global_edge = elem_local_to_global_edge_[elem_idx];
+
+                    if (local_edge_idx >= static_cast<int>(local_to_global_edge.size())) {
+                        FEEM_WARN("单元{}的局部棱边索引越界", mapping.element_id);
+                        continue;
+                    }
+
+                    int global_edge_id = local_to_global_edge[local_edge_idx];
+
+                    bool is_cotree_or_circulation =
+                        (cotree_edges.count(global_edge_id) > 0) ||
+                        (circulation_dofs.count(global_edge_id) > 0);
+
+                    if (is_cotree_or_circulation) {
+                        auto it = cotree_to_reduced.find(global_edge_id);
+                        if (it != cotree_to_reduced.end()) {
+                            mapping.indices[i] = scalar_free_count + it->second;
+                            free_to_reduced_[mapping.indices[i]] = mapping.indices[i];
+                        } else {
+                            FEEM_WARN("余树边{}未在约化映射表中找到", global_edge_id);
+                            mapping.indices[i] = -1;
+                        }
+                    } else {
+                        mapping.indices[i] = -1;
+                    }
+                }
+            }
+        } else if (mapping.num_vector_dofs > 0) {
+            // VECTOR_EDGE_ONLY单元：所有DOF都是矢量DOF
+            size_t elem_idx = static_cast<size_t>(mapping.element_id);
+            if (elem_idx >= elem_local_to_global_edge_.size()) {
+                FEEM_WARN("单元{}的棱边映射缺失", mapping.element_id);
+                continue;
+            }
+
+            const auto& local_to_global_edge = elem_local_to_global_edge_[elem_idx];
+
+            for (size_t i = 0; i < mapping.indices.size(); ++i) {
+                if (mapping.indices[i] >= 0) {
+                    if (i >= local_to_global_edge.size()) {
+                        FEEM_WARN("单元{}的局部棱边索引越界", mapping.element_id);
+                        continue;
+                    }
+
+                    int global_edge_id = local_to_global_edge[i];
+
+                    bool is_cotree_or_circulation =
+                        (cotree_edges.count(global_edge_id) > 0) ||
+                        (circulation_dofs.count(global_edge_id) > 0);
+
+                    if (is_cotree_or_circulation) {
+                        auto it = cotree_to_reduced.find(global_edge_id);
+                        if (it != cotree_to_reduced.end()) {
+                            mapping.indices[i] = scalar_free_count + it->second;
+                            free_to_reduced_[mapping.indices[i]] = mapping.indices[i];
+                        } else {
+                            FEEM_WARN("余树边{}未在约化映射表中找到", global_edge_id);
+                            mapping.indices[i] = -1;
+                        }
+                    } else {
+                        mapping.indices[i] = -1;
+                    }
+                }
+            }
+        }
+        // SCALAR_ONLY单元不需要修改
+    }
+
+    // 更新全局自由DOF计数
+    num_free_dofs_ = scalar_free_count + tree_gauge_->getReducedNumDofs();
+
+    FEEM_DEBUG("约化后总自由DOF数: {} (标量:{} + 余树边:{})",
+               num_free_dofs_, scalar_free_count, tree_gauge_->getReducedNumDofs());
+}
+
 } // namespace fe_em

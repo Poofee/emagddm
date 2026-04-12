@@ -758,6 +758,136 @@ target_link_libraries(test_dc_conduction_solver
 
 add_test(NAME test_dc_conduction_solver COMMAND test_dc_conduction_solver)
 
+# ==================== Tree Gauge模块：图结构提取器测试 ====================
+add_executable(test_mesh_graph_extractor
+    test_mesh_graph_extractor.cpp
+)
+
+target_include_directories(test_mesh_graph_extractor
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/fe_em
+        ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/include/numeric
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+        ${CMAKE_SOURCE_DIR}/lib/eigen
+)
+
+target_link_libraries(test_mesh_graph_extractor
+    PRIVATE
+        tool_lib
+        fe_em_lib
+        spdlog_lib
+        GTest::gtest
+        GTest::gtest_main
+)
+
+add_test(NAME test_mesh_graph_extractor COMMAND test_mesh_graph_extractor)
+
+# ==================== Tree Gauge模块：生成树构建器测试 ====================
+add_executable(test_spanning_tree
+    test_spanning_tree.cpp
+)
+
+target_include_directories(test_spanning_tree
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/fe_em
+        ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/include/numeric
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+        ${CMAKE_SOURCE_DIR}/lib/eigen
+)
+
+target_link_libraries(test_spanning_tree
+    PRIVATE
+        tool_lib
+        fe_em_lib
+        spdlog_lib
+        GTest::gtest
+        GTest::gtest_main
+)
+
+add_test(NAME test_spanning_tree COMMAND test_spanning_tree)
+
+# ==================== Tree Gauge模块：多连通域检测器测试 ====================
+add_executable(test_multi_connected_domain
+    test_multi_connected_domain.cpp
+)
+
+target_include_directories(test_multi_connected_domain
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/fe_em
+        ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/include/numeric
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+        ${CMAKE_SOURCE_DIR}/lib/eigen
+)
+
+target_link_libraries(test_multi_connected_domain
+    PRIVATE
+    tool_lib
+    fe_em_lib
+    spdlog_lib
+    GTest::gtest
+    GTest::gtest_main
+)
+
+add_test(NAME test_multi_connected_domain COMMAND test_multi_connected_domain)
+
+# ==================== Tree Gauge模块：核心应用类TreeGauge测试 ====================
+add_executable(test_tree_gauge
+    test_tree_gauge.cpp
+)
+
+target_include_directories(test_tree_gauge
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/fe_em
+        ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/include/numeric
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+        ${CMAKE_SOURCE_DIR}/lib/eigen
+)
+
+target_link_libraries(test_tree_gauge
+    PRIVATE
+    tool_lib
+    fe_em_lib
+    spdlog_lib
+    GTest::gtest
+    GTest::gtest_main
+)
+
+add_test(NAME test_tree_gauge COMMAND test_tree_gauge)
+
+# ==================== Tree Gauge模块：与EMDOFManager集成测试 ====================
+add_executable(test_tree_gauge_integration
+    test_tree_gauge_integration.cpp
+)
+
+target_include_directories(test_tree_gauge_integration
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include/fe_em
+        ${CMAKE_SOURCE_DIR}/include/tool
+        ${CMAKE_SOURCE_DIR}/include/numeric
+        ${CMAKE_SOURCE_DIR}/lib/spdlog/include
+        ${CMAKE_SOURCE_DIR}/lib/eigen
+)
+
+target_link_libraries(test_tree_gauge_integration
+    PRIVATE
+    tool_lib
+    fe_em_lib
+    spdlog_lib
+    GTest::gtest
+    GTest::gtest_main
+)
+
+add_test(NAME test_tree_gauge_integration COMMAND test_tree_gauge_integration)
+
 # 为所有链接了 fe_em_lib 或 numeric_lib 的测试目标添加 OpenMP 链接
 # （因为 Eigen 库在启用 OpenMP 时会使用 OpenMP 并行功能）
 if(USE_OPENMP AND TARGET OpenMP::OpenMP_CXX)
@@ -774,6 +904,11 @@ if(USE_OPENMP AND TARGET OpenMP::OpenMP_CXX)
         test_eigen_solver_backends_crtp  # 新增：CRTP 重构测试
         test_electrostatic_solver         # 新增：静电场求解器测试
         test_dc_conduction_solver          # 新增：直流电流场求解器测试
+        test_mesh_graph_extractor          # 新增：Tree Gauge图结构提取器测试
+        test_spanning_tree                 # 新增：Tree Gauge生成树构建器测试
+        test_multi_connected_domain        # 新增：Tree Gauge多连通域检测器测试
+        test_tree_gauge                    # 新增：Tree Gauge核心应用类测试
+        test_tree_gauge_integration         # 新增：Tree Gauge与DOF管理器集成测试
     )
         if(TARGET ${test_target})
             target_link_libraries(${test_target} PRIVATE OpenMP::OpenMP_CXX)
